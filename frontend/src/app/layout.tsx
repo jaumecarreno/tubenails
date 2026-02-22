@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google';
 import './globals.css';
 import { AuthProvider } from '@/components/AuthProvider';
 import { DashboardLayout } from '@/components/DashboardLayout';
+import { LanguageProvider } from '@/components/LanguageProvider';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -25,11 +26,13 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
       </head>
       <body className="font-sans min-h-screen text-slate-900 dark:text-slate-100">
-        <AuthProvider>
-          <DashboardLayout>
-            {children}
-          </DashboardLayout>
-        </AuthProvider>
+        <LanguageProvider>
+          <AuthProvider>
+            <DashboardLayout>
+              {children}
+            </DashboardLayout>
+          </AuthProvider>
+        </LanguageProvider>
       </body>
     </html>
   );

@@ -5,6 +5,7 @@ import axios from '@/lib/axios';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ChannelVideo, ChannelVideosResponse, VideoDetailsResponse } from '@/lib/api-types';
+import { useI18n } from '@/components/LanguageProvider';
 
 const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
 const ACCEPTED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
@@ -18,7 +19,7 @@ function fileToDataUrl(file: File): Promise<string> {
     });
 }
 
-function getApiErrorMessage(error: unknown): string {
+function getApiErrorMessage(error: unknown, t: (key: string) => string): string {
     const maybeError = error as {
         response?: {
             status?: number;
@@ -40,23 +41,24 @@ function getApiErrorMessage(error: unknown): string {
         return apiError;
     }
     if (status === 413) {
-        return 'La imagen es demasiado pesada para enviarse. Usa una mas pequena.';
+        return t('new.errorImageTooHeavy');
     }
     if (maybeError.message) {
         return maybeError.message;
     }
-    return 'Error desconocido al crear el test.';
+    return t('new.errorUnknown');
 }
 
 export default function CreateTestPage() {
     const router = useRouter();
     const fileInputRef = useRef<HTMLInputElement | null>(null);
+    const { t, locale } = useI18n();
 
     const [loading, setLoading] = useState(false);
     const [importing, setImporting] = useState(false);
 
     const [videoId, setVideoId] = useState('');
-    const [titleA, setTitleA] = useState('Titulo original (se importa de YouTube)');
+    const [titleA, setTitleA] = useState('Original title (imported from YouTube)');
     const [titleB, setTitleB] = useState('');
     const [durationDays, setDurationDays] = useState(7);
     const [thumbnailA, setThumbnailA] = useState('');
@@ -112,7 +114,7 @@ export default function CreateTestPage() {
             }
         } catch (error) {
             console.error('Error importing video', error);
-            alert('No se pudo descargar el video de YouTube. Revisa el ID y la conexion.');
+            alert(t('new.errorImportVideo'));
         } finally {
             setImporting(false);
         }
@@ -120,12 +122,12 @@ export default function CreateTestPage() {
 
     const handleUploadedThumbnail = async (file: File) => {
         if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
-            setUploadError('Formato no valido. Usa PNG, JPG/JPEG o WEBP.');
+            setUploadError(t('new.errorInvalidFormat'));
             return;
         }
 
         if (file.size > MAX_UPLOAD_BYTES) {
-            setUploadError('La imagen supera 2MB. Usa un archivo mas pequeno.');
+            setUploadError(t('new.errorFileTooLarge'));
             return;
         }
 
@@ -136,7 +138,7 @@ export default function CreateTestPage() {
             setUploadError('');
         } catch (error) {
             console.error('Error reading uploaded thumbnail', error);
-            setUploadError('No se pudo procesar la imagen seleccionada.');
+            setUploadError(t('new.errorReadImage'));
         }
     };
 
@@ -168,12 +170,12 @@ export default function CreateTestPage() {
 
     const handleSubmit = async () => {
         if (!videoId) {
-            alert('Selecciona un video o pega un ID valido antes de continuar.');
+            alert(t('new.alertSelectVideo'));
             return;
         }
 
         if (!thumbnailB) {
-            alert('Sube o pega una miniatura para la variante B.');
+            alert(t('new.alertThumbnail'));
             return;
         }
 
@@ -192,7 +194,7 @@ export default function CreateTestPage() {
             router.push('/');
         } catch (error) {
             console.error('Error creating test', error);
-            alert(`No se pudo crear el test A/B.\n\n${getApiErrorMessage(error)}`);
+            alert(`${t('new.alertCreateFailed')}\n\n${getApiErrorMessage(error, t)}`);
         } finally {
             setLoading(false);
         }
@@ -204,17 +206,17 @@ export default function CreateTestPage() {
                 <div>
                     <Link className="inline-flex items-center gap-1 text-sm text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white transition-colors mb-2 group" href="/">
                         <span className="material-symbols-outlined text-[18px] group-hover:-translate-x-1 transition-transform">chevron_left</span>
-                        Volver al Dashboard
+                        {t('new.backToDashboard')}
                     </Link>
-                    <h2 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">Configurar Nuevo Test A/B</h2>
-                    <p className="text-slate-500 dark:text-gray-400 mt-1">Compara miniaturas y titulos para mejorar CTR.</p>
+                    <h2 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">{t('new.title')}</h2>
+                    <p className="text-slate-500 dark:text-gray-400 mt-1">{t('new.subtitle')}</p>
                 </div>
             </div>
 
             <section className="bg-white dark:bg-surface-dark border border-slate-200 dark:border-slate-700 rounded-xl p-6 mb-6 shadow-sm">
                 <div className="flex items-center gap-3 mb-5">
                     <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-bold text-sm">1</div>
-                    <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Que video quieres optimizar?</h3>
+                    <h3 className="text-lg font-semibold text-slate-900 dark:text-white">{t('new.step.video')}</h3>
                 </div>
 
                 <div className="space-y-6">
@@ -225,7 +227,7 @@ export default function CreateTestPage() {
                         <input
                             type="text"
                             className="block w-full pl-10 pr-3 py-3 border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-surface-dark text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition duration-150 sm:text-sm"
-                            placeholder="Pega URL o ID del video"
+                            placeholder={t('new.videoPlaceholder')}
                             value={videoId}
                             onChange={(e) => setVideoId(e.target.value)}
                         />
@@ -235,13 +237,13 @@ export default function CreateTestPage() {
                             disabled={importing || !videoId}
                             className="absolute inset-y-1 right-1 px-3 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-xs font-medium rounded text-slate-700 dark:text-gray-300 transition-colors disabled:opacity-50"
                         >
-                            {importing ? '...' : 'Importar'}
+                            {importing ? '...' : t('new.import')}
                         </button>
                     </div>
 
                     <div>
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-                            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tus ultimos videos</span>
+                            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{t('new.latestVideos')}</span>
                             <div className="flex gap-2">
                                 <a href="https://studio.youtube.com/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center rounded-lg border border-transparent bg-slate-100 dark:bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
                                     <span className="material-symbols-outlined mr-1.5 text-[16px]">open_in_new</span>
@@ -257,7 +259,7 @@ export default function CreateTestPage() {
                         {fetchingVideos ? (
                             <div className="flex items-center justify-center p-8 bg-slate-50 dark:bg-surface-dark-hover rounded-xl border border-dashed border-slate-200 dark:border-slate-700">
                                 <span className="animate-spin material-symbols-outlined text-slate-400 mr-2">sync</span>
-                                <span className="text-sm text-slate-500">Cargando catalogo...</span>
+                                <span className="text-sm text-slate-500">{t('new.loadingCatalog')}</span>
                             </div>
                         ) : recentVideos.length > 0 ? (
                             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 custom-scrollbar max-h-[360px] overflow-y-auto p-1">
@@ -269,7 +271,7 @@ export default function CreateTestPage() {
                                     >
                                         {videoId === video.videoId && (
                                             <div className="absolute top-2 right-2 bg-primary text-white text-[10px] font-bold px-2 py-0.5 rounded-full z-10 shadow-sm">
-                                                SELECCIONADO
+                                                {t('new.selected')}
                                             </div>
                                         )}
                                         <div className="aspect-video w-full bg-cover bg-center" style={{ backgroundImage: `url('${video.thumbnailUrl}')` }}></div>
@@ -277,7 +279,7 @@ export default function CreateTestPage() {
                                             <p className="text-sm font-medium text-slate-900 dark:text-white line-clamp-2" title={video.title}>{video.title}</p>
                                             <div className="flex items-center gap-2 mt-1.5">
                                                 <span className="text-[11px] text-slate-500">
-                                                    {new Date(video.publishedAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
+                                                    {new Date(video.publishedAt).toLocaleDateString(locale, { day: 'numeric', month: 'short' })}
                                                 </span>
                                             </div>
                                         </div>
@@ -289,10 +291,10 @@ export default function CreateTestPage() {
                                 <div className="mx-auto w-12 h-12 bg-red-100 text-red-500 rounded-full flex items-center justify-center mb-3">
                                     <span className="material-symbols-outlined">videocam_off</span>
                                 </div>
-                                <p className="text-sm font-medium text-slate-900 dark:text-white mb-1">No hay videos disponibles</p>
-                                <p className="text-xs text-slate-500 mb-4 max-w-sm mx-auto">Conecta tu cuenta de YouTube para importar videos recientes.</p>
+                                <p className="text-sm font-medium text-slate-900 dark:text-white mb-1">{t('new.noVideos')}</p>
+                                <p className="text-xs text-slate-500 mb-4 max-w-sm mx-auto">{t('new.noVideosHint')}</p>
                                 <Link href="/settings" className="mx-auto inline-flex items-center text-xs font-bold text-red-600 bg-red-50 px-3 py-1.5 rounded-md hover:bg-red-100 transition-colors">
-                                    Ir a Configuracion
+                                    {t('new.goSettings')}
                                 </Link>
                             </div>
                         )}
@@ -303,7 +305,7 @@ export default function CreateTestPage() {
             <section className="bg-white dark:bg-surface-dark border border-slate-200 dark:border-slate-700 rounded-xl p-6 mb-6 shadow-sm">
                 <div className="flex items-center gap-3 mb-5">
                     <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-bold text-sm">2</div>
-                    <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Define tus variantes</h3>
+                    <h3 className="text-lg font-semibold text-slate-900 dark:text-white">{t('new.step.variants')}</h3>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -311,15 +313,15 @@ export default function CreateTestPage() {
                         <div className="flex items-center justify-between">
                             <span className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
                                 <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-                                Variante A (Control)
+                                {t('new.variantA')}
                             </span>
-                            <span className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-500 px-2 py-0.5 rounded">Solo lectura</span>
+                            <span className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-500 px-2 py-0.5 rounded">{t('new.readOnly')}</span>
                         </div>
                         <div className="relative aspect-video w-full rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700">
                             <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url('${thumbnailA}')` }}></div>
                         </div>
                         <div>
-                            <label className="block text-xs font-medium text-slate-500 mb-1.5">Titulo del video</label>
+                            <label className="block text-xs font-medium text-slate-500 mb-1.5">{t('new.videoTitle')}</label>
                             <input type="text" disabled className="block w-full px-3 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-100 dark:bg-surface-dark-hover text-slate-500 dark:text-slate-400 text-sm cursor-not-allowed opacity-75" value={titleA} />
                         </div>
                     </div>
@@ -328,9 +330,9 @@ export default function CreateTestPage() {
                         <div className="flex items-center justify-between">
                             <span className="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-2">
                                 <span className="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
-                                Variante B (Test)
+                                {t('new.variantB')}
                             </span>
-                            <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded font-medium">Editable</span>
+                            <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded font-medium">{t('new.editable')}</span>
                         </div>
 
                         <div className="relative aspect-video w-full rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-surface-dark flex items-center justify-center">
@@ -369,15 +371,15 @@ export default function CreateTestPage() {
                         >
                             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                                 <div className="text-xs text-slate-600 dark:text-slate-300">
-                                    <p className="font-semibold">Sube miniatura variante B</p>
-                                    <p>Arrastra una imagen aqui o usa el boton (PNG/JPG/WEBP, max 2MB).</p>
+                                    <p className="font-semibold">{t('new.uploadTitle')}</p>
+                                    <p>{t('new.uploadHint')}</p>
                                 </div>
                                 <button
                                     type="button"
                                     onClick={() => fileInputRef.current?.click()}
                                     className="inline-flex items-center justify-center rounded-lg bg-primary px-3 py-2 text-xs font-bold text-white hover:bg-red-600 transition-colors"
                                 >
-                                    Subir imagen
+                                    {t('new.uploadButton')}
                                 </button>
                             </div>
                         </div>
@@ -387,22 +389,22 @@ export default function CreateTestPage() {
                         )}
 
                         <div>
-                            <label className="block text-xs font-medium text-slate-500 mb-1.5">O pega URL de miniatura</label>
+                            <label className="block text-xs font-medium text-slate-500 mb-1.5">{t('new.thumbnailUrl')}</label>
                             <input
                                 type="text"
                                 className="block w-full px-3 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-surface-dark-hover text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition duration-150 text-sm"
-                                placeholder="https://ejemplo.com/imagen.jpg"
+                                placeholder={t('new.thumbnailUrlPlaceholder')}
                                 value={thumbnailUrlInput}
                                 onChange={(e) => handleThumbnailUrlChange(e.target.value)}
                             />
                         </div>
 
                         <div>
-                            <label className="block text-xs font-medium text-slate-500 mb-1.5">Nuevo titulo (opcional)</label>
+                            <label className="block text-xs font-medium text-slate-500 mb-1.5">{t('new.newTitle')}</label>
                             <input
                                 type="text"
                                 className="block w-full px-3 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-surface-dark-hover text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition duration-150 text-sm"
-                                placeholder="Escribe un titulo alternativo..."
+                                placeholder={t('new.newTitlePlaceholder')}
                                 value={titleB}
                                 onChange={(e) => setTitleB(e.target.value)}
                             />
@@ -414,7 +416,7 @@ export default function CreateTestPage() {
             <section className="bg-white dark:bg-surface-dark border border-slate-200 dark:border-slate-700 rounded-xl p-6 shadow-sm">
                 <div className="flex items-center gap-3 mb-5">
                     <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-bold text-sm">3</div>
-                    <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Duracion del test</h3>
+                    <h3 className="text-lg font-semibold text-slate-900 dark:text-white">{t('new.step.duration')}</h3>
                 </div>
 
                 <div className="flex flex-col sm:flex-row gap-4">
@@ -423,21 +425,21 @@ export default function CreateTestPage() {
                             <input type="radio" name="duration" value="4" className="peer sr-only" checked={durationDays === 4} onChange={() => setDurationDays(4)} />
                             <div className="flex flex-col items-center justify-center p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-surface-dark-hover peer-checked:bg-primary/10 peer-checked:border-primary peer-checked:text-primary transition-all h-full">
                                 <span className="text-lg font-bold">4</span>
-                                <span className="text-xs font-medium uppercase tracking-wide">Dias</span>
+                                <span className="text-xs font-medium uppercase tracking-wide">{t('new.days')}</span>
                             </div>
                         </label>
                         <label className="cursor-pointer">
                             <input type="radio" name="duration" value="7" className="peer sr-only" checked={durationDays === 7} onChange={() => setDurationDays(7)} />
                             <div className="flex flex-col items-center justify-center p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-surface-dark-hover peer-checked:bg-primary/10 peer-checked:border-primary peer-checked:text-primary transition-all h-full">
                                 <span className="text-lg font-bold">7</span>
-                                <span className="text-xs font-medium uppercase tracking-wide">Dias</span>
+                                <span className="text-xs font-medium uppercase tracking-wide">{t('new.days')}</span>
                             </div>
                         </label>
                         <label className="cursor-pointer">
                             <input type="radio" name="duration" value="14" className="peer sr-only" checked={durationDays === 14} onChange={() => setDurationDays(14)} />
                             <div className="flex flex-col items-center justify-center p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-surface-dark-hover peer-checked:bg-primary/10 peer-checked:border-primary peer-checked:text-primary transition-all h-full">
                                 <span className="text-lg font-bold">14</span>
-                                <span className="text-xs font-medium uppercase tracking-wide">Dias</span>
+                                <span className="text-xs font-medium uppercase tracking-wide">{t('new.days')}</span>
                             </div>
                         </label>
                     </div>
@@ -445,9 +447,9 @@ export default function CreateTestPage() {
                     <div className="flex-1 bg-blue-500/10 border border-blue-500/20 rounded-lg p-4 flex gap-3">
                         <span className="material-symbols-outlined text-blue-500 shrink-0">info</span>
                         <div className="text-sm">
-                            <p className="font-medium text-slate-900 dark:text-blue-100 mb-1">Metodologia de rotacion</p>
+                            <p className="font-medium text-slate-900 dark:text-blue-100 mb-1">{t('new.rotation')}</p>
                             <p className="text-slate-500 dark:text-blue-200/70 text-xs leading-relaxed">
-                                El sistema rota miniatura y titulo cada 24h a las 00:01 PT para mantener exposicion homogenea.
+                                {t('new.rotationHint')}
                             </p>
                         </div>
                     </div>
@@ -460,7 +462,7 @@ export default function CreateTestPage() {
                         className={`flex items-center justify-center gap-2 text-white font-bold py-3 px-8 rounded-lg shadow-lg shadow-primary/30 transition-all ${loading ? 'bg-red-400 cursor-not-allowed' : 'bg-primary hover:bg-red-600 hover:scale-[1.02]'}`}
                     >
                         {loading && <span className="animate-spin material-symbols-outlined">sync</span>}
-                        {loading ? 'Creando Test DB...' : 'Iniciar Test A/B Ahora'}
+                        {loading ? t('new.creating') : t('new.start')}
                     </button>
                 </div>
             </section>

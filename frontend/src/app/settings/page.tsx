@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import axios from '@/lib/axios';
 import Link from 'next/link';
 import { UserSettingsResponse } from '@/lib/api-types';
+import { useI18n } from '@/components/LanguageProvider';
 
 function getErrorMessage(error: unknown): string {
     if (error instanceof Error) {
@@ -15,6 +16,7 @@ function getErrorMessage(error: unknown): string {
 export default function SettingsPage() {
     const [userData, setUserData] = useState<UserSettingsResponse | null>(null);
     const [loading, setLoading] = useState(true);
+    const { t } = useI18n();
 
     async function fetchSettings() {
         const response = await axios.get<UserSettingsResponse>(`/api/user/settings?t=${Date.now()}`);
@@ -40,7 +42,7 @@ export default function SettingsPage() {
             window.location.href = response.data.url;
         } catch (error) {
             console.error('Failed to initialize YouTube connect flow', error);
-            alert(`Could not start YouTube OAuth flow: ${getErrorMessage(error)}`);
+            alert(t('settings.errorConnect', { message: getErrorMessage(error) }));
         }
     };
 
@@ -50,14 +52,14 @@ export default function SettingsPage() {
             await fetchSettings();
         } catch (error) {
             console.error('Failed to disconnect YouTube account', error);
-            alert('Error disconnecting account. Check console for details.');
+            alert(t('settings.errorDisconnect'));
         }
     };
 
     if (loading) {
         return (
             <div className="flex-1 w-full max-w-[1200px] mx-auto px-6 py-20 text-center">
-                <p className="text-slate-500 animate-pulse">Loading profile...</p>
+                <p className="text-slate-500 animate-pulse">{t('settings.loading')}</p>
             </div>
         );
     }
@@ -70,7 +72,7 @@ export default function SettingsPage() {
         usage: { activeTests: 0, totalTests: 0 }
     };
     const { user, isYoutubeConnected, usage, channelId, plan } = safeUserData;
-    const planLabel = plan.toLowerCase() === 'pro' ? 'Pro' : 'Basic (Free)';
+    const planLabel = plan.toLowerCase() === 'pro' ? t('settings.plan.pro') : t('settings.plan.basic');
     const usagePercent = Math.min((usage.totalTests / 3) * 100, 100);
 
     return (
@@ -78,11 +80,11 @@ export default function SettingsPage() {
             <div className="mb-10">
                 <Link href="/" className="group inline-flex items-center gap-1 text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-primary mb-4 transition-colors">
                     <span className="material-symbols-outlined text-[20px] group-hover:-translate-x-1 transition-transform">arrow_back</span>
-                    Back to Dashboard
+                    {t('settings.backToDashboard')}
                 </Link>
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">Account Settings</h1>
-                    <p className="text-slate-500 dark:text-slate-400 mt-2 text-lg">Manage your YouTube connection, billing and preferences.</p>
+                    <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">{t('settings.title')}</h1>
+                    <p className="text-slate-500 dark:text-slate-400 mt-2 text-lg">{t('settings.subtitle')}</p>
                 </div>
             </div>
 
@@ -92,15 +94,15 @@ export default function SettingsPage() {
                         <div className="flex items-center justify-between mb-6">
                             <div className="flex items-center gap-3">
                                 <span className="material-symbols-outlined text-red-500">video_library</span>
-                                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">YouTube Connection</h2>
+                                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">{t('settings.youtube')}</h2>
                             </div>
                             {isYoutubeConnected ? (
                                 <span className="inline-flex items-center rounded-full bg-green-100 dark:bg-green-900/30 px-2.5 py-0.5 text-xs font-medium text-green-800 dark:text-green-400 ring-1 ring-inset ring-green-600/20">
-                                    Connected
+                                    {t('settings.connected')}
                                 </span>
                             ) : (
                                 <span className="inline-flex items-center rounded-full bg-red-100 dark:bg-red-900/30 px-2.5 py-0.5 text-xs font-medium text-red-800 dark:text-red-400 ring-1 ring-inset ring-red-600/20">
-                                    Disconnected
+                                    {t('settings.disconnected')}
                                 </span>
                             )}
                         </div>
@@ -117,8 +119,8 @@ export default function SettingsPage() {
                                         </div>
                                     </div>
                                     <div className="flex-1">
-                                        <h3 className="text-base font-bold text-slate-900 dark:text-white">{user.email || 'CTR Sniper user'}</h3>
-                                        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">CTR Sniper is authorized to update YouTube titles and thumbnails for your tests.</p>
+                                        <h3 className="text-base font-bold text-slate-900 dark:text-white">{user.email || t('settings.userFallback')}</h3>
+                                        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{t('settings.authorized')}</p>
                                     </div>
                                 </div>
                                 <div className="flex justify-between items-center w-full">
@@ -129,7 +131,7 @@ export default function SettingsPage() {
                                         </a>
                                         <a href={channelId ? `https://youtube.com/channel/${channelId}` : 'https://youtube.com/'} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center rounded-lg border border-transparent bg-transparent px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                                             <span className="material-symbols-outlined mr-2 text-[18px]">play_circle</span>
-                                            My Channel
+                                            {t('settings.myChannel')}
                                         </a>
                                     </div>
                                     <button
@@ -137,16 +139,16 @@ export default function SettingsPage() {
                                         className="inline-flex items-center justify-center rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-transparent px-4 py-2 text-sm font-medium text-red-600 dark:text-red-400 shadow-sm hover:bg-red-50 dark:hover:bg-red-900/20 hover:border-red-200 dark:hover:border-red-800 transition-colors"
                                     >
                                         <span className="material-symbols-outlined mr-2 text-[18px]">link_off</span>
-                                        Disconnect Channel
+                                        {t('settings.disconnectChannel')}
                                     </button>
                                 </div>
                             </>
                         ) : (
                             <div className="text-center py-6">
-                                <p className="text-slate-500 mb-4 text-sm">Connect your channel to run automatic test rotations.</p>
+                                <p className="text-slate-500 mb-4 text-sm">{t('settings.connectHint')}</p>
                                 <button onClick={handleConnectYoutube} className="inline-flex items-center justify-center rounded-lg bg-red-600 px-6 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-red-700 transition-colors">
                                     <span className="material-symbols-outlined mr-2">video_library</span>
-                                    Connect YouTube
+                                    {t('settings.connectYoutube')}
                                 </button>
                             </div>
                         )}
@@ -158,22 +160,22 @@ export default function SettingsPage() {
                         <div className="p-6 border-b border-slate-200 dark:border-slate-700">
                             <div className="flex items-center gap-3 mb-4">
                                 <span className="material-symbols-outlined text-slate-400">credit_card</span>
-                                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Subscription</h2>
+                                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">{t('settings.subscription')}</h2>
                             </div>
                             <div className="flex items-baseline justify-between mb-2">
-                                <span className="text-sm font-medium text-slate-500 dark:text-slate-400">Current plan</span>
+                                <span className="text-sm font-medium text-slate-500 dark:text-slate-400">{t('settings.currentPlan')}</span>
                                 <span className="inline-flex items-center rounded-md bg-slate-100 dark:bg-slate-700 px-2 py-1 text-xs font-medium text-slate-600 dark:text-slate-300 ring-1 ring-inset ring-slate-500/10">{planLabel}</span>
                             </div>
 
                             <div className="mt-4">
                                 <div className="flex justify-between text-sm font-medium mb-2">
-                                    <span className="text-slate-700 dark:text-slate-300">A/B test usage</span>
-                                    <span className="text-slate-900 dark:text-white">{usage.totalTests} of 3</span>
+                                    <span className="text-slate-700 dark:text-slate-300">{t('settings.usage')}</span>
+                                    <span className="text-slate-900 dark:text-white">{t('settings.usageOf', { used: usage.totalTests, limit: 3 })}</span>
                                 </div>
                                 <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden">
                                     <div className="bg-primary h-2.5 rounded-full" style={{ width: `${usagePercent}%` }}></div>
                                 </div>
-                                <p className="text-xs text-slate-500 mt-3">{usage.activeTests} active tests right now.</p>
+                                <p className="text-xs text-slate-500 mt-3">{t('settings.activeNow', { count: usage.activeTests })}</p>
                             </div>
                         </div>
                     </section>

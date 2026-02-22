@@ -5,6 +5,9 @@ import axios from '@/lib/axios';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { TestResultsResponse, TestVariant, VariantStats } from '@/lib/api-types';
+import { useI18n } from '@/components/LanguageProvider';
+
+type Translator = (key: string, variables?: Record<string, string | number>) => string;
 
 function daysRemaining(startDate: string, durationDays: number): number {
     const start = new Date(startDate);
@@ -15,14 +18,17 @@ function daysRemaining(startDate: string, durationDays: number): number {
     return Math.max(durationDays - elapsedDays, 0);
 }
 
-function formatPercent(value: number, decimals: number = 2): string {
+function formatPercent(value: number, locale: string, decimals: number = 2): string {
     const safe = Number.isFinite(value) ? value : 0;
-    return `${safe.toFixed(decimals)}%`;
+    return `${safe.toLocaleString(locale, {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals
+    })}%`;
 }
 
-function formatNumber(value: number, decimals: number = 0): string {
+function formatNumber(value: number, locale: string, decimals: number = 0): string {
     const safe = Number.isFinite(value) ? value : 0;
-    return safe.toLocaleString(undefined, {
+    return safe.toLocaleString(locale, {
         minimumFractionDigits: decimals,
         maximumFractionDigits: decimals
     });
@@ -32,51 +38,45 @@ function toVariantName(variant: TestVariant): string {
     return variant === 'A' ? 'A' : 'B';
 }
 
-function getConfidenceLevel(confidence: number): { label: string; className: string } {
+function getConfidenceLevel(confidence: number, t: Translator): { label: string; className: string } {
     if (confidence >= 0.95) {
         return {
-            label: 'High',
+            label: t('results.confidence.high'),
             className: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
         };
     }
     if (confidence >= 0.8) {
         return {
-            label: 'Medium',
+            label: t('results.confidence.medium'),
             className: 'bg-amber-500/10 text-amber-500 border-amber-500/20'
         };
     }
     return {
-        label: 'Low',
+        label: t('results.confidence.low'),
         className: 'bg-rose-500/10 text-rose-500 border-rose-500/20'
     };
 }
 
-function getReasonLabel(reason: string): string {
+function getReasonLabel(reason: string, t: Translator): string {
     const reasons = reason
         .split(',')
         .map((token) => token.trim())
         .filter(Boolean);
 
     if (reasons.length === 0) {
-        return 'No reason provided';
+        return t('results.noReason');
     }
 
-    const labels: Record<string, string> = {
-        auto_criteria_met: 'Auto criteria met',
-        manual_override: 'Manual winner applied',
-        test_in_progress: 'Test still running',
-        criteria_met_waiting_test_end: 'Criteria met but waiting for test end',
-        insufficient_exposure_days: 'Not enough exposure days',
-        insufficient_impressions: 'Not enough impressions',
-        insufficient_confidence: 'Confidence below threshold',
-        insufficient_ctr_delta: 'CTR delta below threshold',
-        insufficient_score_delta: 'Score delta below threshold'
-    };
-
-    return reasons.map((token) => labels[token] ?? token).join(', ');
+    return reasons
+        .map((token) => {
+            const key = `results.reason.${token}`;
+            const translated = t(key);
+            return translated === key ? token : translated;
+        })
+        .join(', ');
 }
 
-function getApiErrorMessage(error: unknown): string {
+function getApiErrorMessage(error: unknown, t: Translator): string {
     const maybeError = error as {
         response?: {
             data?: {
@@ -91,7 +91,7 @@ function getApiErrorMessage(error: unknown): string {
         maybeError.response?.data?.details ??
         maybeError.response?.data?.error ??
         maybeError.message ??
-        'Unexpected API error'
+        t('results.errorUnexpected')
     );
 }
 
@@ -109,12 +109,16 @@ function VariantCard({
     label,
     thumbnailUrl,
     stats,
-    isWinner
+    isWinner,
+    locale,
+    t
 }: {
     label: string;
     thumbnailUrl: string;
     stats: VariantStats;
     isWinner: boolean;
+    locale: string;
+    t: Translator;
 }) {
     return (
         <div className="space-y-4">
@@ -123,7 +127,7 @@ function VariantCard({
                 {isWinner && (
                     <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-500">
                         <span className="material-symbols-outlined text-sm">check_circle</span>
-                        Winner
+                        {t('results.winner')}
                     </span>
                 )}
             </div>
@@ -132,28 +136,28 @@ function VariantCard({
             </div>
             <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-background-dark/50 p-3">
-                    <p className="text-[11px] uppercase tracking-wide text-slate-500">CTR</p>
-                    <p className="text-lg font-bold text-slate-900 dark:text-white">{formatPercent(stats.ctr, 3)}</p>
+                    <p className="text-[11px] uppercase tracking-wide text-slate-500">{t('results.metric.ctr')}</p>
+                    <p className="text-lg font-bold text-slate-900 dark:text-white">{formatPercent(stats.ctr, locale, 3)}</p>
                 </div>
                 <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-background-dark/50 p-3">
-                    <p className="text-[11px] uppercase tracking-wide text-slate-500">Score</p>
-                    <p className="text-lg font-bold text-slate-900 dark:text-white">{formatNumber(stats.score, 3)}</p>
+                    <p className="text-[11px] uppercase tracking-wide text-slate-500">{t('results.metric.score')}</p>
+                    <p className="text-lg font-bold text-slate-900 dark:text-white">{formatNumber(stats.score, locale, 3)}</p>
                 </div>
                 <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-background-dark/50 p-3">
-                    <p className="text-[11px] uppercase tracking-wide text-slate-500">Impressions</p>
-                    <p className="text-lg font-bold text-slate-900 dark:text-white">{formatNumber(stats.impressions)}</p>
+                    <p className="text-[11px] uppercase tracking-wide text-slate-500">{t('results.metric.impressions')}</p>
+                    <p className="text-lg font-bold text-slate-900 dark:text-white">{formatNumber(stats.impressions, locale)}</p>
                 </div>
                 <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-background-dark/50 p-3">
-                    <p className="text-[11px] uppercase tracking-wide text-slate-500">Estimated Clicks</p>
-                    <p className="text-lg font-bold text-slate-900 dark:text-white">{formatNumber(stats.estimatedClicks)}</p>
+                    <p className="text-[11px] uppercase tracking-wide text-slate-500">{t('results.metric.estimatedClicks')}</p>
+                    <p className="text-lg font-bold text-slate-900 dark:text-white">{formatNumber(stats.estimatedClicks, locale)}</p>
                 </div>
                 <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-background-dark/50 p-3">
-                    <p className="text-[11px] uppercase tracking-wide text-slate-500">Watch Minutes</p>
-                    <p className="text-lg font-bold text-slate-900 dark:text-white">{formatNumber(stats.estimatedMinutesWatched, 2)}</p>
+                    <p className="text-[11px] uppercase tracking-wide text-slate-500">{t('results.metric.watchMinutes')}</p>
+                    <p className="text-lg font-bold text-slate-900 dark:text-white">{formatNumber(stats.estimatedMinutesWatched, locale, 2)}</p>
                 </div>
                 <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-background-dark/50 p-3">
-                    <p className="text-[11px] uppercase tracking-wide text-slate-500">WTPI</p>
-                    <p className="text-lg font-bold text-slate-900 dark:text-white">{formatNumber(stats.wtpi, 4)}</p>
+                    <p className="text-[11px] uppercase tracking-wide text-slate-500">{t('results.metric.wtpi')}</p>
+                    <p className="text-lg font-bold text-slate-900 dark:text-white">{formatNumber(stats.wtpi, locale, 4)}</p>
                 </div>
             </div>
         </div>
@@ -163,6 +167,7 @@ function VariantCard({
 export default function ResultsPage() {
     const params = useParams<{ id: string }>();
     const id = params?.id;
+    const { t, locale } = useI18n();
 
     const [testData, setTestData] = useState<TestResultsResponse | null>(null);
     const [loading, setLoading] = useState(true);
@@ -184,7 +189,7 @@ export default function ResultsPage() {
             await loadResults(id);
         } catch (error) {
             console.error('Sync failed', error);
-            alert(`Could not synchronize analytics: ${getApiErrorMessage(error)}`);
+            alert(t('results.errorSync', { message: getApiErrorMessage(error, t) }));
         } finally {
             setSyncing(false);
         }
@@ -201,7 +206,7 @@ export default function ResultsPage() {
             await loadResults(id);
         } catch (error) {
             console.error('Manual winner apply failed', error);
-            alert(`Could not apply variant ${variant}: ${getApiErrorMessage(error)}`);
+            alert(t('results.errorApply', { variant, message: getApiErrorMessage(error, t) }));
         } finally {
             setApplyingVariant(null);
         }
@@ -248,7 +253,7 @@ export default function ResultsPage() {
     if (loading) {
         return (
             <div className="flex-1 w-full max-w-[1200px] mx-auto px-6 py-20 text-center">
-                <p className="text-slate-500 animate-pulse">Loading results...</p>
+                <p className="text-slate-500 animate-pulse">{t('results.loading')}</p>
             </div>
         );
     }
@@ -256,7 +261,7 @@ export default function ResultsPage() {
     if (!testData) {
         return (
             <div className="flex-1 w-full max-w-[1200px] mx-auto px-6 py-20 text-center">
-                <p className="text-red-500">Test not found or API error.</p>
+                <p className="text-red-500">{t('results.notFound')}</p>
             </div>
         );
     }
@@ -270,7 +275,7 @@ export default function ResultsPage() {
     const remainingDays = daysRemaining(activeTest.start_date, activeTest.duration_days);
     const scoreDelta = Math.abs(statsA.score - statsB.score);
     const ctrDelta = Math.abs(statsA.ctr - statsB.ctr);
-    const confidenceLevel = getConfidenceLevel(decision.confidence ?? 0);
+    const confidenceLevel = getConfidenceLevel(decision.confidence ?? 0, t);
 
     return (
         <div className="flex-1 w-full max-w-[1200px] mx-auto px-6 py-8 pb-20 overflow-y-auto">
@@ -278,16 +283,16 @@ export default function ResultsPage() {
                 <div className="flex flex-col gap-2">
                     <Link href="/" className="group flex items-center gap-2 text-slate-400 hover:text-primary transition-colors text-sm font-medium w-fit">
                         <span className="material-symbols-outlined text-lg group-hover:-translate-x-1 transition-transform">arrow_back</span>
-                        Back to Dashboard
+                        {t('results.backToDashboard')}
                     </Link>
                     <div className="flex items-center gap-3 mt-1 flex-wrap">
-                        <h2 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">{activeTest.title_a || 'Video Test'}</h2>
+                        <h2 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">{activeTest.title_a || t('results.videoFallback')}</h2>
                         <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${isFinished ? 'bg-slate-500/10 text-slate-500 border-slate-500/20' : 'bg-green-500/10 text-green-500 border-green-500/20'}`}>
                             {!isFinished && <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>}
-                            Status: {isFinished ? 'Finished' : 'Running'}
+                            {t('results.status')}: {isFinished ? t('results.finished') : t('results.running')}
                         </span>
                         <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${confidenceLevel.className}`}>
-                            Confidence {confidenceLevel.label} ({formatPercent((decision.confidence ?? 0) * 100, 1)})
+                            {t('results.confidence')} {confidenceLevel.label} ({formatPercent((decision.confidence ?? 0) * 100, locale, 1)})
                         </span>
                     </div>
                 </div>
@@ -305,25 +310,25 @@ export default function ResultsPage() {
                             <div>
                                 {!isFinished && (
                                     <>
-                                        <h3 className="text-xl font-bold text-slate-900 dark:text-white">Collecting data</h3>
-                                        <p className="text-slate-500 dark:text-slate-400 text-sm">Rotation executes daily at 00:01 PT. Winner decision remains pending.</p>
+                                        <h3 className="text-xl font-bold text-slate-900 dark:text-white">{t('results.collectingData')}</h3>
+                                        <p className="text-slate-500 dark:text-slate-400 text-sm">{t('results.collectingHint')}</p>
                                     </>
                                 )}
                                 {isFinished && !isInconclusive && (
                                     <>
                                         <h3 className="text-xl font-bold text-slate-900 dark:text-white">
-                                            Variant {computedWinnerVariant ? toVariantName(computedWinnerVariant) : 'N/A'} selected
+                                            {t('results.variantSelected', { variant: computedWinnerVariant ? toVariantName(computedWinnerVariant) : t('results.na') })}
                                         </h3>
                                         <p className="text-slate-500 dark:text-slate-400 text-sm">
-                                            Winner mode: {decision.winnerMode}. Reason: {getReasonLabel(decision.reason)}.
+                                            {t('results.winnerModeReason', { mode: decision.winnerMode, reason: getReasonLabel(decision.reason, t) })}
                                         </p>
                                     </>
                                 )}
                                 {isFinished && isInconclusive && (
                                     <>
-                                        <h3 className="text-xl font-bold text-slate-900 dark:text-white">Inconclusive test</h3>
+                                        <h3 className="text-xl font-bold text-slate-900 dark:text-white">{t('results.inconclusive')}</h3>
                                         <p className="text-slate-500 dark:text-slate-400 text-sm">
-                                            Auto-win criteria not met. Choose a variant manually to close with override.
+                                            {t('results.inconclusiveHint')}
                                         </p>
                                     </>
                                 )}
@@ -332,19 +337,19 @@ export default function ResultsPage() {
 
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
                             <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-background-dark/50 p-3">
-                                <p className="text-[11px] uppercase tracking-wide text-slate-500">Score Delta</p>
-                                <p className="text-xl font-bold text-slate-900 dark:text-white">{formatNumber(scoreDelta, 3)}</p>
+                                <p className="text-[11px] uppercase tracking-wide text-slate-500">{t('results.scoreDelta')}</p>
+                                <p className="text-xl font-bold text-slate-900 dark:text-white">{formatNumber(scoreDelta, locale, 3)}</p>
                             </div>
                             <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-background-dark/50 p-3">
-                                <p className="text-[11px] uppercase tracking-wide text-slate-500">CTR Delta</p>
-                                <p className="text-xl font-bold text-slate-900 dark:text-white">{formatPercent(ctrDelta, 3)}</p>
+                                <p className="text-[11px] uppercase tracking-wide text-slate-500">{t('results.ctrDelta')}</p>
+                                <p className="text-xl font-bold text-slate-900 dark:text-white">{formatPercent(ctrDelta, locale, 3)}</p>
                             </div>
                             <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-background-dark/50 p-3">
-                                <p className="text-[11px] uppercase tracking-wide text-slate-500">P-Value</p>
-                                <p className="text-xl font-bold text-slate-900 dark:text-white">{formatNumber(decision.pValue, 4)}</p>
+                                <p className="text-[11px] uppercase tracking-wide text-slate-500">{t('results.pValue')}</p>
+                                <p className="text-xl font-bold text-slate-900 dark:text-white">{formatNumber(decision.pValue, locale, 4)}</p>
                             </div>
                             <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-background-dark/50 p-3">
-                                <p className="text-[11px] uppercase tracking-wide text-slate-500">Days Remaining</p>
+                                <p className="text-[11px] uppercase tracking-wide text-slate-500">{t('results.daysRemaining')}</p>
                                 <p className="text-xl font-bold text-slate-900 dark:text-white">{remainingDays}</p>
                             </div>
                         </div>
@@ -356,7 +361,7 @@ export default function ResultsPage() {
                                 className="w-full sm:w-auto bg-primary hover:bg-red-600 disabled:bg-slate-300 disabled:dark:bg-slate-700 disabled:text-slate-500 text-white font-bold py-3 px-4 rounded-lg shadow-lg shadow-primary/20 transition-all flex items-center justify-center gap-2"
                             >
                                 <span className={`material-symbols-outlined text-[20px] ${syncing ? 'animate-spin' : ''}`}>sync</span>
-                                {syncing ? 'Synchronizing...' : 'Sync Latest Analytics'}
+                                {syncing ? t('results.syncing') : t('results.sync')}
                             </button>
 
                             {isInconclusive && (
@@ -366,14 +371,14 @@ export default function ResultsPage() {
                                         disabled={applyingVariant !== null}
                                         className="w-full sm:w-auto border border-slate-300 dark:border-slate-600 bg-white dark:bg-surface-dark px-4 py-3 rounded-lg text-sm font-semibold text-slate-900 dark:text-white hover:border-primary hover:text-primary transition-colors disabled:opacity-50"
                                     >
-                                        {applyingVariant === 'A' ? 'Applying A...' : 'Apply Manual A'}
+                                        {applyingVariant === 'A' ? t('results.applyingA') : t('results.applyA')}
                                     </button>
                                     <button
                                         onClick={() => { void handleApplyWinner('B'); }}
                                         disabled={applyingVariant !== null}
                                         className="w-full sm:w-auto border border-primary/40 bg-primary/10 px-4 py-3 rounded-lg text-sm font-semibold text-primary hover:bg-primary hover:text-white transition-colors disabled:opacity-50"
                                     >
-                                        {applyingVariant === 'B' ? 'Applying B...' : 'Apply Manual B'}
+                                        {applyingVariant === 'B' ? t('results.applyingB') : t('results.applyB')}
                                     </button>
                                 </>
                             )}
@@ -382,9 +387,9 @@ export default function ResultsPage() {
                 </div>
 
                 <div className="flex flex-col gap-6">
-                    <h3 className="text-lg font-bold text-slate-900 dark:text-white">Decision Reason</h3>
+                    <h3 className="text-lg font-bold text-slate-900 dark:text-white">{t('results.decisionReason')}</h3>
                     <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-surface-dark p-4">
-                        <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">{getReasonLabel(decision.reason)}</p>
+                        <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">{getReasonLabel(decision.reason, t)}</p>
                     </div>
                 </div>
             </div>
@@ -392,18 +397,22 @@ export default function ResultsPage() {
             <section className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <article className={`rounded-xl border bg-white dark:bg-surface-dark p-5 ${getVariantBorderClass('A', computedWinnerVariant)}`}>
                     <VariantCard
-                        label="Variant A (Control)"
+                        label={t('new.variantA')}
                         thumbnailUrl={activeTest.thumbnail_url_a}
                         stats={statsA}
                         isWinner={computedWinnerVariant === 'A'}
+                        locale={locale}
+                        t={t}
                     />
                 </article>
                 <article className={`rounded-xl border bg-white dark:bg-surface-dark p-5 ${getVariantBorderClass('B', computedWinnerVariant)}`}>
                     <VariantCard
-                        label="Variant B (Test)"
+                        label={t('new.variantB')}
                         thumbnailUrl={activeTest.thumbnail_url_b}
                         stats={statsB}
                         isWinner={computedWinnerVariant === 'B'}
+                        locale={locale}
+                        t={t}
                     />
                 </article>
             </section>

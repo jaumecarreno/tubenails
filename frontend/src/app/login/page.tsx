@@ -1,9 +1,12 @@
 "use client";
-import { supabase } from '@/lib/supabase';
+
 import { useState } from 'react';
+import { supabase } from '@/lib/supabase';
+import { useI18n } from '@/components/LanguageProvider';
 
 export default function LoginPage() {
     const [loading, setLoading] = useState(false);
+    const { t } = useI18n();
 
     const handleGoogleLogin = async () => {
         try {
@@ -13,16 +16,18 @@ export default function LoginPage() {
                 options: {
                     queryParams: {
                         access_type: 'offline',
-                        prompt: 'consent',
+                        prompt: 'consent'
                     },
                     redirectTo: `${window.location.origin}/`
                 }
             });
-            if (error) throw error;
+            if (error) {
+                throw error;
+            }
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             console.error('Error logging in:', message);
-            alert('Error iniciando sesión con Google.');
+            alert(t('login.errorGoogle'));
         } finally {
             setLoading(false);
         }
@@ -35,9 +40,9 @@ export default function LoginPage() {
                     <span className="material-symbols-outlined text-white text-3xl">youtube_activity</span>
                 </div>
 
-                <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-2 text-center">Bienvenido a CTR Sniper</h1>
+                <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-2 text-center">{t('login.title')}</h1>
                 <p className="text-slate-500 dark:text-slate-400 text-center mb-8 text-sm">
-                    Inicia sesión para automatizar tus tests A/B y descubrir qué miniaturas generan más visualizaciones.
+                    {t('login.subtitle')}
                 </p>
 
                 <button
@@ -56,11 +61,11 @@ export default function LoginPage() {
                             <path d="M1 1h22v22H1z" fill="none" />
                         </svg>
                     )}
-                    {loading ? 'Conectando...' : 'Entrar con Google'}
+                    {loading ? t('login.connecting') : t('login.google')}
                 </button>
 
                 <p className="text-xs text-slate-400 mt-6 text-center">
-                    Al iniciar sesión aceptas nuestros Términos de Servicio y la Política de Privacidad.
+                    {t('login.terms')}
                 </p>
             </div>
         </div>
