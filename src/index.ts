@@ -57,6 +57,7 @@ function getAuthenticatedUser(req: Request): User {
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3001';
 const PORT = Number(process.env.PORT || 3000);
+const JSON_BODY_LIMIT = process.env.JSON_BODY_LIMIT || '6mb';
 const allowedOrigins = buildAllowedOrigins(process.env.FRONTEND_URL);
 
 const supabaseAuth = createClient(
@@ -83,7 +84,7 @@ app.use(cors({
     },
     credentials: true
 }));
-app.use(express.json());
+app.use(express.json({ limit: JSON_BODY_LIMIT }));
 
 app.get('/api/health', (_req: Request, res: Response) => {
     res.json({ status: 'ok' });
@@ -524,6 +525,17 @@ app.delete('/api/user/youtube', async (req: Request, res: Response) => {
         console.error('Error disconnecting YouTube:', error);
         return res.status(500).json({ error: 'Failed to disconnect YouTube account' });
     }
+});
+
+app.use((error: unknown, _req: Request, res: Response, next: NextFunction) => {
+    const maybeError = error as { type?: string };
+    if (maybeError?.type === 'entity.too.large') {
+        return res.status(413).json({
+            error: 'Payload too large',
+            details: 'Uploaded thumbnail is too large for request body. Please use a smaller image.'
+        });
+    }
+    return next(error);
 });
 
 export async function startServer() {

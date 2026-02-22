@@ -18,6 +18,36 @@ function fileToDataUrl(file: File): Promise<string> {
     });
 }
 
+function getApiErrorMessage(error: unknown): string {
+    const maybeError = error as {
+        response?: {
+            status?: number;
+            data?: {
+                error?: string;
+                details?: string;
+            };
+        };
+        message?: string;
+    };
+
+    const status = maybeError.response?.status;
+    const apiError = maybeError.response?.data?.error;
+    const apiDetails = maybeError.response?.data?.details;
+    if (apiDetails) {
+        return apiDetails;
+    }
+    if (apiError) {
+        return apiError;
+    }
+    if (status === 413) {
+        return 'La imagen es demasiado pesada para enviarse. Usa una mas pequena.';
+    }
+    if (maybeError.message) {
+        return maybeError.message;
+    }
+    return 'Error desconocido al crear el test.';
+}
+
 export default function CreateTestPage() {
     const router = useRouter();
     const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -162,7 +192,7 @@ export default function CreateTestPage() {
             router.push('/');
         } catch (error) {
             console.error('Error creating test', error);
-            alert('No se pudo crear el test A/B.');
+            alert(`No se pudo crear el test A/B.\n\n${getApiErrorMessage(error)}`);
         } finally {
             setLoading(false);
         }

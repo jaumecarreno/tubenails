@@ -15,6 +15,7 @@ services:
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
       - FRONTEND_URL=${FRONTEND_URL}
+      - JSON_BODY_LIMIT=${JSON_BODY_LIMIT}
       - PORT=3000
     restart: unless-stopped
     networks:

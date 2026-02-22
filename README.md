@@ -28,6 +28,7 @@ Copy `.env.example` to `.env` and configure:
 - `SUPABASE_URL`
 - `SUPABASE_ANON_KEY`
 - `FRONTEND_URL`
+- `JSON_BODY_LIMIT` (recommended: `6mb` for thumbnail uploads)
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 
