@@ -19,8 +19,9 @@ export default function LoginPage() {
                 }
             });
             if (error) throw error;
-        } catch (error: any) {
-            console.error('Error logging in:', error.message);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            console.error('Error logging in:', message);
             alert('Error iniciando sesión con Google.');
         } finally {
             setLoading(false);

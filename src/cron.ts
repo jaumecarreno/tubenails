@@ -1,109 +1,99 @@
 import cron from 'node-cron';
 import { pool } from './db';
-import { updateVideoThumbnail, updateVideoTitle, getDailyAnalytics } from './youtube';
+import { getDailyAnalytics, updateVideoThumbnail, updateVideoTitle } from './youtube';
+import { computeEstimatedClicks, splitDailyResultsByVariant } from './metrics';
 
-// Ejecutar todos los días a las 00:01 AM (Pacific Time)
+function getErrorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
+}
+
 export function startCronJobs() {
     cron.schedule('1 0 * * *', async () => {
         console.log(`[${new Date().toISOString()}] Running daily variant alternation job...`);
         const client = await pool.connect();
 
         try {
-            // Find active tests
-            const result = await client.query("SELECT * FROM Tests WHERE status = 'active'");
+            const result = await client.query("SELECT * FROM tests WHERE status = 'active'");
             const tests = result.rows;
 
             for (const test of tests) {
                 try {
                     const {
-                        id, user_id, video_id, current_variant,
-                        title_a, title_b, thumbnail_url_a, thumbnail_url_b
+                        id,
+                        user_id: userId,
+                        video_id: videoId,
+                        current_variant: currentVariant,
+                        title_a: titleA,
+                        title_b: titleB,
+                        thumbnail_url_a: thumbnailUrlA,
+                        thumbnail_url_b: thumbnailUrlB
                     } = test;
 
-                    // 1. Fetch Analytics for yesterday
                     const yesterday = new Date();
                     yesterday.setDate(yesterday.getDate() - 1);
                     const dateStr = yesterday.toISOString().split('T')[0];
 
                     try {
-                        const metrics = await getDailyAnalytics(user_id, video_id, dateStr);
-                        console.log(`Metrics for test ${id} on ${dateStr}:`, metrics.rows);
-
-                        // Si metrics.rows tiene datos, insertamos (simplificado)
-                        // En un caso real, extraerías el índice exacto de 'views' o 'impressions'
+                        const metrics = await getDailyAnalytics(userId, videoId, dateStr);
                         if (metrics.rows && metrics.rows.length > 0) {
                             const row = metrics.rows[0];
-                            // Assuming row[2] = views, row[3] = CTR based on dimension/metric order
-                            const views = row[2] || 0;
-                            const ctr = row[3] || 0;
-                            const estimatedClicks = Math.round(views * ctr);
+                            // With dimensions day,video => [day, video, impressions, impressionsCtr]
+                            const impressions = Number(row[2] || 0);
+                            const ctrPercent = Number(row[3] || 0);
+                            const estimatedClicks = computeEstimatedClicks(impressions, ctrPercent);
 
                             await client.query(
-                                'INSERT INTO Daily_Results (test_id, date, impressions, clicks) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING',
-                                [id, dateStr, views, estimatedClicks]
+                                `
+                                INSERT INTO daily_results (test_id, date, impressions, clicks)
+                                VALUES ($1, $2, $3, $4)
+                                ON CONFLICT DO NOTHING
+                            `,
+                                [id, dateStr, impressions, estimatedClicks]
                             );
                         }
-                    } catch (e: any) {
-                        console.error(`Failed to fetch analytics for test ${id}: ${e.message}`);
+                    } catch (error) {
+                        console.error(`Failed to fetch analytics for test ${id}: ${getErrorMessage(error)}`);
                     }
 
-                    // 2. Comprobar si el test ha terminado
                     const startDate = new Date(test.start_date);
                     const todayDate = new Date();
-                    const diffTime = Math.abs(todayDate.getTime() - startDate.getTime());
-                    const daysPassed = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                    const daysPassed = Math.floor(
+                        Math.abs(todayDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
+                    );
 
                     if (daysPassed >= test.duration_days) {
-                        console.log(`Test ${id} has finished (${daysPassed} days). Calculating winner...`);
-
-                        // Query all daily results to find winner
-                        const resultsRes = await client.query('SELECT * FROM daily_results WHERE test_id = $1 ORDER BY date ASC', [id]);
-                        let impA = 0, clicksA = 0, impB = 0, clicksB = 0;
-
-                        // Re-use logic to split A and B by day index
-                        resultsRes.rows.forEach(row => {
-                            const rowDate = new Date(row.date);
-                            rowDate.setHours(0, 0, 0, 0);
-                            const startD = new Date(startDate);
-                            startD.setHours(0, 0, 0, 0);
-                            const dayDiff = Math.floor(Math.abs(rowDate.getTime() - startD.getTime()) / (1000 * 60 * 60 * 24));
-
-                            if (dayDiff % 2 === 0) { impA += row.impressions; clicksA += row.clicks; }
-                            else { impB += row.impressions; clicksB += row.clicks; }
-                        });
-
-                        const ctrA = impA > 0 ? (clicksA / impA) : 0;
-                        const ctrB = impB > 0 ? (clicksB / impB) : 0;
+                        const resultsRes = await client.query(
+                            'SELECT date, impressions, clicks FROM daily_results WHERE test_id = $1 ORDER BY date ASC',
+                            [id]
+                        );
+                        const split = splitDailyResultsByVariant(resultsRes.rows, startDate);
+                        const ctrA = split.a.impressions > 0 ? split.a.clicks / split.a.impressions : 0;
+                        const ctrB = split.b.impressions > 0 ? split.b.clicks / split.b.impressions : 0;
 
                         const winnerVariant = ctrB > ctrA ? 'B' : 'A';
-                        const finalTitle = winnerVariant === 'A' ? title_a : title_b;
-                        const finalThumb = winnerVariant === 'A' ? thumbnail_url_a : thumbnail_url_b;
+                        const finalTitle = winnerVariant === 'A' ? titleA : titleB;
+                        const finalThumb = winnerVariant === 'A' ? thumbnailUrlA : thumbnailUrlB;
 
-                        console.log(`Test ${id} winner is Variant ${winnerVariant}. Applying final metadata.`);
-                        await updateVideoTitle(user_id, video_id, finalTitle);
-                        await updateVideoThumbnail(user_id, video_id, finalThumb);
-
-                        await client.query("UPDATE tests SET status = 'finished', current_variant = $1 WHERE id = $2", [winnerVariant, id]);
-
+                        await updateVideoTitle(userId, videoId, finalTitle);
+                        await updateVideoThumbnail(userId, videoId, finalThumb);
+                        await client.query(
+                            "UPDATE tests SET status = 'finished', current_variant = $1 WHERE id = $2",
+                            [winnerVariant, id]
+                        );
                     } else {
-                        // 3. Alternar Variante normal
-                        const nextVariant = current_variant === 'A' ? 'B' : 'A';
-                        const nextTitle = nextVariant === 'A' ? title_a : title_b;
-                        const nextThumb = nextVariant === 'A' ? thumbnail_url_a : thumbnail_url_b;
+                        const nextVariant = currentVariant === 'A' ? 'B' : 'A';
+                        const nextTitle = nextVariant === 'A' ? titleA : titleB;
+                        const nextThumb = nextVariant === 'A' ? thumbnailUrlA : thumbnailUrlB;
 
-                        console.log(`Test ${id}: Changing from ${current_variant} to ${nextVariant}`);
-
-                        await updateVideoTitle(user_id, video_id, nextTitle);
-                        await updateVideoThumbnail(user_id, video_id, nextThumb);
-
+                        await updateVideoTitle(userId, videoId, nextTitle);
+                        await updateVideoThumbnail(userId, videoId, nextThumb);
                         await client.query('UPDATE tests SET current_variant = $1 WHERE id = $2', [nextVariant, id]);
                     }
 
-                    // Sleep 2 seconds to avoid YouTube API rate limits
-                    await new Promise(r => setTimeout(r, 2000));
-
-                } catch (err: any) {
-                    console.error(`Error processing test ${test.id}:`, err.message);
+                    // Space requests to reduce YouTube API rate-limit pressure.
+                    await new Promise((resolve) => setTimeout(resolve, 2000));
+                } catch (error) {
+                    console.error(`Error processing test ${test.id}: ${getErrorMessage(error)}`);
                 }
             }
         } catch (error) {
@@ -113,7 +103,7 @@ export function startCronJobs() {
         }
     }, {
         scheduled: true,
-        timezone: "America/Los_Angeles"
+        timezone: 'America/Los_Angeles'
     });
 
     console.log('Cron job scheduled for 00:01 AM PT.');

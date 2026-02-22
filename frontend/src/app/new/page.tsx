@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import axios from '@/lib/axios';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { ChannelVideo, ChannelVideosResponse, VideoDetailsResponse } from '@/lib/api-types';
 
 export default function CreateTestPage() {
     const router = useRouter();
@@ -17,7 +18,7 @@ export default function CreateTestPage() {
     const [thumbnailA, setThumbnailA] = useState('');
     const [thumbnailB, setThumbnailB] = useState('');
 
-    const [recentVideos, setRecentVideos] = useState<any[]>([]);
+    const [recentVideos, setRecentVideos] = useState<ChannelVideo[]>([]);
     const [fetchingVideos, setFetchingVideos] = useState(true);
     const [channelId, setChannelId] = useState('');
 
@@ -25,7 +26,7 @@ export default function CreateTestPage() {
     useEffect(() => {
         async function loadVideos() {
             try {
-                const res = await axios.get('/api/youtube/videos');
+                const res = await axios.get<ChannelVideosResponse>('/api/youtube/videos');
                 setRecentVideos(res.data.videos || []);
                 setChannelId(res.data.channelId || '');
             } catch (err) {
@@ -37,7 +38,7 @@ export default function CreateTestPage() {
         loadVideos();
     }, []);
 
-    const handleSelectVideo = (video: any) => {
+    const handleSelectVideo = (video: ChannelVideo) => {
         setVideoId(video.videoId);
         setTitleA(video.title);
         setThumbnailA(video.thumbnailUrl);
@@ -48,7 +49,7 @@ export default function CreateTestPage() {
         if (!videoId) return;
         try {
             setImporting(true);
-            const response = await axios.get(`/api/youtube/video/${videoId}`);
+            const response = await axios.get<VideoDetailsResponse>(`/api/youtube/video/${videoId}`);
             const { title, thumbnailUrl } = response.data;
             if (title) setTitleA(title);
             if (thumbnailUrl) {
@@ -304,7 +305,7 @@ export default function CreateTestPage() {
                         <div className="text-sm">
                             <p className="font-medium text-slate-900 dark:text-blue-100 mb-1">Metodología de Rotación</p>
                             <p className="text-slate-500 dark:text-blue-200/70 text-xs leading-relaxed">
-                                El sistema rotará la miniatura y título cada 24h a media noche (UTC) asignando exposición homogénea.
+                                El sistema rota miniatura y titulo cada 24h a las 00:01 PT para mantener exposicion homogenea.
                             </p>
                         </div>
                     </div>

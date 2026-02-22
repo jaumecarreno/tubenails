@@ -10,6 +10,8 @@ export async function setupDatabase() {
     const client = await pool.connect();
     try {
         await client.query(`
+      CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
       CREATE TABLE IF NOT EXISTS Users (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         email VARCHAR(255) UNIQUE NOT NULL,
@@ -42,7 +44,22 @@ export async function setupDatabase() {
         clicks INT DEFAULT 0,
         UNIQUE(test_id, date)
       );
+
+      CREATE TABLE IF NOT EXISTS Oauth_States (
+        nonce VARCHAR(64) PRIMARY KEY,
+        user_id UUID REFERENCES Users(id) ON DELETE CASCADE,
+        expires_at TIMESTAMP NOT NULL,
+        used_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
     `);
+
+        await client.query(`
+      UPDATE Tests
+      SET status = 'finished'
+      WHERE status = 'completed'
+    `);
+
         console.log('Database tables ensured.');
     } catch (error) {
         console.error('Error setting up database:', error);

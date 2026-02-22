@@ -49,8 +49,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                         console.warn(`Missing tokens in hash`);
                         return;
                     }
-                } catch (e: any) {
-                    console.error(`Exception parsing hash: ${e.message}`);
+                } catch (error) {
+                    const message = error instanceof Error ? error.message : String(error);
+                    console.error(`Exception parsing hash: ${message}`);
                     return;
                 }
             }
@@ -83,7 +84,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         return () => {
             subscription.unsubscribe();
         };
-    }, []);
+    }, [router]);
 
     // Route Protection Logic
     useEffect(() => {

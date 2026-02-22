@@ -148,14 +148,13 @@ export async function getDailyAnalytics(userId: string, videoId: string, dateStr
     const auth = await getClientForUser(userId);
     const analytics = google.youtubeAnalytics({ version: 'v2', auth });
 
-    // Querying YouTube Analytics for views and annotation CTR as proxies for performance.
-    // Note: True "impressions" for thumbnails often require specific metrics in yt-analytics,
-    // we use views and CTR which are standard available metrics.
+    // Use thumbnail-impression metrics so estimated clicks can be calculated as
+    // impressions * (impressionsCtr / 100).
     const res = await analytics.reports.query({
         ids: 'channel==MINE',
         startDate: dateStr,
         endDate: dateStr,
-        metrics: 'views,annotationClickThroughRate', // We can add 'impressions' if the account scope allows it
+        metrics: 'impressions,impressionsCtr',
         dimensions: 'day,video',
         filters: `video==${videoId}`
     });
