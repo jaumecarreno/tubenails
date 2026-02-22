@@ -1,6 +1,8 @@
 export type TestStatus = 'active' | 'finished';
 export type TestVariant = 'A' | 'B';
 export type WinnerMode = 'auto' | 'manual' | 'inconclusive' | 'pending';
+export type PlanTier = 'basic' | 'premium' | 'teams';
+export type WorkspaceRole = 'owner' | 'admin' | 'member';
 
 export interface TestRecord {
     id: string;
@@ -44,16 +46,60 @@ export interface UserSettingsResponse {
     user: {
         id: string;
         email: string;
-        plan: string;
+        plan: PlanTier;
         createdAt: string;
     };
-    plan: string;
+    plan: PlanTier;
     isYoutubeConnected: boolean;
     channelId: string;
     usage: {
         activeTests: number;
         totalTests: number;
     };
+    workspace: WorkspaceSummary;
+}
+
+export interface WorkspaceSummary {
+    id: string;
+    name: string;
+    role: WorkspaceRole;
+    ownerUserId: string;
+    ownerEmail: string;
+    collaborationEnabled: boolean;
+    seatLimit: number;
+    memberCount: number;
+    pendingInvitesCount: number;
+    canManageInvites: boolean;
+    canManageMembers: boolean;
+}
+
+export interface TeamMember {
+    user_id: string;
+    email: string;
+    role: WorkspaceRole;
+    created_at: string;
+}
+
+export interface PendingInvite {
+    id: string;
+    email: string;
+    role: 'admin' | 'member';
+    status: 'pending' | 'accepted' | 'cancelled' | 'expired';
+    expires_at: string;
+    created_at: string;
+}
+
+export interface TeamPermissions {
+    canManageInvites: boolean;
+    canChangeMemberRole: boolean;
+    canRemoveMembers: boolean;
+}
+
+export interface TeamResponse {
+    workspace: WorkspaceSummary;
+    permissions: TeamPermissions;
+    members: TeamMember[];
+    pendingInvites: PendingInvite[];
 }
 
 export interface ChannelVideo {

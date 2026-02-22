@@ -15,8 +15,35 @@ import {
     summarizeFinishedTestMetrics,
     VariantId
 } from './metrics';
-import { applyWinnerSchema, createTestSchema, formatZodError, testIdParamSchema } from './validation';
+import {
+    acceptTeamInviteSchema,
+    applyWinnerSchema,
+    createTeamInviteSchema,
+    createTestSchema,
+    formatZodError,
+    teamInviteIdParamSchema,
+    teamMemberUserIdParamSchema,
+    testIdParamSchema,
+    updateTeamMemberRoleSchema
+} from './validation';
 import { getChannelVideos, getDailyAnalytics, getVideoDetails, updateVideoThumbnail, updateVideoTitle } from './youtube';
+import {
+    buildInviteExpiryDate,
+    buildInviteUrl,
+    canChangeMemberRole,
+    canManageInvites,
+    canRemoveMember,
+    defaultWorkspaceNameFromEmail,
+    generateInviteToken,
+    getSeatLimitForPlan,
+    hashInviteToken,
+    isWorkspaceRole,
+    normalizeInviteEmail,
+    normalizePlan,
+    PlanTier,
+    planSupportsCollaboration,
+    WorkspaceRole
+} from './team';
 
 dotenv.config();
 
@@ -96,6 +123,315 @@ interface AuthenticatedRequest extends Request {
 
 function getAuthenticatedUser(req: Request): User {
     return (req as AuthenticatedRequest).user;
+}
+
+interface WorkspaceContext {
+    workspaceId: string;
+    workspaceName: string;
+    role: WorkspaceRole;
+    ownerUserId: string;
+    ownerEmail: string;
+    ownerPlan: PlanTier;
+    seatLimit: number;
+    collaborationEnabled: boolean;
+}
+
+interface WorkspaceMemberRow {
+    workspace_id: string;
+    workspace_name: string;
+    role: string;
+    owner_user_id: string;
+    owner_email: string;
+    owner_plan: string;
+}
+
+interface TeamMemberRecord {
+    user_id: string;
+    email: string;
+    role: WorkspaceRole;
+    created_at: string;
+}
+
+interface PendingInviteRecord {
+    id: string;
+    email: string;
+    role: 'admin' | 'member';
+    status: 'pending' | 'accepted' | 'cancelled' | 'expired';
+    expires_at: string;
+    created_at: string;
+}
+
+function workspaceContextFromRow(row: WorkspaceMemberRow): WorkspaceContext {
+    const role: WorkspaceRole = isWorkspaceRole(row.role) ? row.role : 'member';
+    const ownerPlan = normalizePlan(row.owner_plan);
+    return {
+        workspaceId: row.workspace_id,
+        workspaceName: row.workspace_name,
+        role,
+        ownerUserId: row.owner_user_id,
+        ownerEmail: row.owner_email,
+        ownerPlan,
+        seatLimit: getSeatLimitForPlan(ownerPlan),
+        collaborationEnabled: planSupportsCollaboration(ownerPlan)
+    };
+}
+
+async function ensureOwnedWorkspaceForUser(userId: string, email: string): Promise<void> {
+    const workspaceName = defaultWorkspaceNameFromEmail(email);
+    const workspaceRes = await pool.query<{ id: string }>(
+        `
+        INSERT INTO workspaces (owner_user_id, name)
+        VALUES ($1, $2)
+        ON CONFLICT (owner_user_id) DO UPDATE SET name = workspaces.name
+        RETURNING id
+    `,
+        [userId, workspaceName]
+    );
+
+    const workspaceId = workspaceRes.rows[0]?.id;
+    if (!workspaceId) {
+        return;
+    }
+
+    await pool.query(
+        `
+        INSERT INTO workspace_members (workspace_id, user_id, role)
+        VALUES ($1, $2, 'owner')
+        ON CONFLICT (workspace_id, user_id) DO NOTHING
+    `,
+        [workspaceId, userId]
+    );
+
+    await pool.query(
+        `
+        UPDATE users
+        SET current_workspace_id = COALESCE(current_workspace_id, $1)
+        WHERE id = $2
+    `,
+        [workspaceId, userId]
+    );
+}
+
+async function getWorkspaceContextForUser(userId: string): Promise<WorkspaceContext> {
+    const currentWorkspaceRes = await pool.query<WorkspaceMemberRow>(
+        `
+        SELECT
+            wm.workspace_id,
+            wm.role,
+            w.name AS workspace_name,
+            w.owner_user_id,
+            owner.email AS owner_email,
+            owner.stripe_plan AS owner_plan
+        FROM users u
+        JOIN workspace_members wm ON wm.workspace_id = u.current_workspace_id AND wm.user_id = u.id
+        JOIN workspaces w ON w.id = wm.workspace_id
+        JOIN users owner ON owner.id = w.owner_user_id
+        WHERE u.id = $1
+        LIMIT 1
+    `,
+        [userId]
+    );
+
+    if ((currentWorkspaceRes.rowCount ?? 0) > 0) {
+        return workspaceContextFromRow(currentWorkspaceRes.rows[0]);
+    }
+
+    const membershipRes = await pool.query<WorkspaceMemberRow>(
+        `
+        SELECT
+            wm.workspace_id,
+            wm.role,
+            w.name AS workspace_name,
+            w.owner_user_id,
+            owner.email AS owner_email,
+            owner.stripe_plan AS owner_plan
+        FROM workspace_members wm
+        JOIN workspaces w ON w.id = wm.workspace_id
+        JOIN users owner ON owner.id = w.owner_user_id
+        WHERE wm.user_id = $1
+        ORDER BY wm.created_at DESC
+        LIMIT 1
+    `,
+        [userId]
+    );
+
+    if ((membershipRes.rowCount ?? 0) > 0) {
+        const row = membershipRes.rows[0];
+        await pool.query(
+            `
+            UPDATE users
+            SET current_workspace_id = $1
+            WHERE id = $2
+        `,
+            [row.workspace_id, userId]
+        );
+        return workspaceContextFromRow(row);
+    }
+
+    const userRes = await pool.query<{ email: string }>(
+        'SELECT email FROM users WHERE id = $1',
+        [userId]
+    );
+    const userEmail = userRes.rows[0]?.email ?? `${userId}@unknown.local`;
+    await ensureOwnedWorkspaceForUser(userId, userEmail);
+
+    const createdWorkspaceRes = await pool.query<WorkspaceMemberRow>(
+        `
+        SELECT
+            wm.workspace_id,
+            wm.role,
+            w.name AS workspace_name,
+            w.owner_user_id,
+            owner.email AS owner_email,
+            owner.stripe_plan AS owner_plan
+        FROM workspace_members wm
+        JOIN workspaces w ON w.id = wm.workspace_id
+        JOIN users owner ON owner.id = w.owner_user_id
+        WHERE wm.user_id = $1
+        ORDER BY wm.created_at DESC
+        LIMIT 1
+    `,
+        [userId]
+    );
+
+    if ((createdWorkspaceRes.rowCount ?? 0) === 0) {
+        throw new Error('Could not resolve workspace context');
+    }
+
+    return workspaceContextFromRow(createdWorkspaceRes.rows[0]);
+}
+
+async function getWorkspaceMembers(workspaceId: string): Promise<TeamMemberRecord[]> {
+    const membersRes = await pool.query<TeamMemberRecord>(
+        `
+        SELECT
+            wm.user_id,
+            u.email,
+            wm.role::text AS role,
+            wm.created_at
+        FROM workspace_members wm
+        JOIN users u ON u.id = wm.user_id
+        WHERE wm.workspace_id = $1
+        ORDER BY
+            CASE wm.role
+                WHEN 'owner' THEN 0
+                WHEN 'admin' THEN 1
+                ELSE 2
+            END,
+            wm.created_at ASC
+    `,
+        [workspaceId]
+    );
+    return membersRes.rows.map((member) => ({
+        ...member,
+        role: isWorkspaceRole(member.role) ? member.role : 'member'
+    }));
+}
+
+async function getPendingWorkspaceInvites(workspaceId: string): Promise<PendingInviteRecord[]> {
+    await pool.query(
+        `
+        UPDATE workspace_invites
+        SET status = 'expired'
+        WHERE workspace_id = $1
+          AND status = 'pending'
+          AND expires_at <= NOW()
+    `,
+        [workspaceId]
+    );
+
+    const invitesRes = await pool.query<PendingInviteRecord>(
+        `
+        SELECT
+            id,
+            email,
+            role::text AS role,
+            status::text AS status,
+            expires_at,
+            created_at
+        FROM workspace_invites
+        WHERE workspace_id = $1
+          AND status = 'pending'
+          AND expires_at > NOW()
+        ORDER BY created_at DESC
+    `,
+        [workspaceId]
+    );
+
+    return invitesRes.rows;
+}
+
+async function getWorkspaceMemberCount(workspaceId: string): Promise<number> {
+    const countRes = await pool.query<{ member_count: string }>(
+        `
+        SELECT COUNT(*)::int AS member_count
+        FROM workspace_members
+        WHERE workspace_id = $1
+    `,
+        [workspaceId]
+    );
+    return Number(countRes.rows[0]?.member_count ?? 0);
+}
+
+interface AccessibleTestRecord {
+    id: string;
+    user_id: string;
+    workspace_id: string;
+    video_id: string;
+    title_a: string;
+    title_b: string;
+    thumbnail_url_a: string;
+    thumbnail_url_b: string;
+    start_date: string;
+    duration_days: number;
+    status: string;
+    current_variant: VariantId;
+    winner_variant: VariantId | null;
+    winner_mode: string | null;
+    winner_confidence: number | null;
+    winner_score_a: number | null;
+    winner_score_b: number | null;
+    decision_reason: string | null;
+    review_required: boolean | null;
+}
+
+async function getAccessibleTestForUser(testId: string, userId: string): Promise<AccessibleTestRecord | null> {
+    const testRes = await pool.query<AccessibleTestRecord>(
+        `
+        SELECT t.*
+        FROM tests t
+        JOIN workspace_members wm ON wm.workspace_id = t.workspace_id
+        WHERE t.id = $1
+          AND wm.user_id = $2
+        LIMIT 1
+    `,
+        [testId, userId]
+    );
+
+    return (testRes.rowCount ?? 0) > 0 ? testRes.rows[0] : null;
+}
+
+async function setFallbackCurrentWorkspaceForUser(userId: string): Promise<void> {
+    const fallbackRes = await pool.query<{ workspace_id: string }>(
+        `
+        SELECT workspace_id
+        FROM workspace_members
+        WHERE user_id = $1
+        ORDER BY created_at DESC
+        LIMIT 1
+    `,
+        [userId]
+    );
+
+    const fallbackWorkspaceId = fallbackRes.rows[0]?.workspace_id ?? null;
+    await pool.query(
+        `
+        UPDATE users
+        SET current_workspace_id = $1
+        WHERE id = $2
+    `,
+        [fallbackWorkspaceId, userId]
+    );
 }
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3001';
@@ -280,10 +616,444 @@ app.use(async (req: Request, res: Response, next: NextFunction) => {
     }
 });
 
+app.get('/api/team', async (req: Request, res: Response) => {
+    try {
+        const user = getAuthenticatedUser(req);
+        const context = await getWorkspaceContextForUser(user.id);
+        const members = await getWorkspaceMembers(context.workspaceId);
+        const pendingInvites = await getPendingWorkspaceInvites(context.workspaceId);
+        const memberCount = members.length;
+
+        const effectiveMembers = context.collaborationEnabled
+            ? members
+            : members.filter((member) => member.user_id === user.id);
+        const effectiveInvites = context.collaborationEnabled ? pendingInvites : [];
+
+        return res.json({
+            workspace: {
+                id: context.workspaceId,
+                name: context.workspaceName,
+                role: context.role,
+                ownerUserId: context.ownerUserId,
+                ownerEmail: context.ownerEmail,
+                plan: context.ownerPlan,
+                seatLimit: context.seatLimit,
+                memberCount,
+                collaborationEnabled: context.collaborationEnabled
+            },
+            permissions: {
+                canManageInvites: context.collaborationEnabled && canManageInvites(context.role),
+                canChangeMemberRole: context.collaborationEnabled && canChangeMemberRole(context.role),
+                canRemoveMembers: context.collaborationEnabled && (context.role === 'owner' || context.role === 'admin')
+            },
+            members: effectiveMembers,
+            pendingInvites: effectiveInvites
+        });
+    } catch (error) {
+        console.error('Error fetching team data:', error);
+        return res.status(500).json({ error: 'Failed to fetch team data' });
+    }
+});
+
+app.post('/api/team/invites', async (req: Request, res: Response) => {
+    const parsedBody = createTeamInviteSchema.safeParse(req.body);
+    if (!parsedBody.success) {
+        return res.status(400).json({ error: 'Invalid request payload', details: formatZodError(parsedBody.error) });
+    }
+
+    try {
+        const user = getAuthenticatedUser(req);
+        const context = await getWorkspaceContextForUser(user.id);
+
+        if (!context.collaborationEnabled) {
+            return res.status(403).json({ error: 'Plan does not support team collaboration' });
+        }
+        if (!canManageInvites(context.role)) {
+            return res.status(403).json({ error: 'Insufficient permissions to manage team invites' });
+        }
+
+        const normalizedEmail = normalizeInviteEmail(parsedBody.data.email);
+        const existingMemberRes = await pool.query(
+            `
+            SELECT wm.user_id
+            FROM workspace_members wm
+            JOIN users u ON u.id = wm.user_id
+            WHERE wm.workspace_id = $1
+              AND LOWER(u.email) = $2
+            LIMIT 1
+        `,
+            [context.workspaceId, normalizedEmail]
+        );
+        if ((existingMemberRes.rowCount ?? 0) > 0) {
+            return res.status(409).json({ error: 'User is already a member of this workspace' });
+        }
+
+        const memberCount = await getWorkspaceMemberCount(context.workspaceId);
+        if (memberCount >= context.seatLimit) {
+            return res.status(409).json({ error: 'Seat limit reached for current plan' });
+        }
+
+        const inviteToken = generateInviteToken();
+        const inviteTokenHash = hashInviteToken(inviteToken);
+        const expiresAt = buildInviteExpiryDate();
+
+        try {
+            const inviteInsertRes = await pool.query<{ id: string; expires_at: string }>(
+                `
+                INSERT INTO workspace_invites (
+                    workspace_id,
+                    email,
+                    email_norm,
+                    role,
+                    token_hash,
+                    status,
+                    invited_by_user_id,
+                    expires_at
+                )
+                VALUES ($1, $2, $3, $4, $5, 'pending', $6, $7)
+                RETURNING id, expires_at
+            `,
+                [
+                    context.workspaceId,
+                    parsedBody.data.email.trim(),
+                    normalizedEmail,
+                    parsedBody.data.role,
+                    inviteTokenHash,
+                    user.id,
+                    expiresAt.toISOString()
+                ]
+            );
+
+            const inviteId = inviteInsertRes.rows[0].id;
+            const inviteExpiresAt = inviteInsertRes.rows[0].expires_at;
+            return res.json({
+                inviteId,
+                inviteUrl: buildInviteUrl(FRONTEND_URL, inviteToken),
+                expiresAt: inviteExpiresAt
+            });
+        } catch (insertError) {
+            const maybeDbError = insertError as { code?: string };
+            if (maybeDbError.code === '23505') {
+                return res.status(409).json({ error: 'A pending invite already exists for this email' });
+            }
+            throw insertError;
+        }
+    } catch (error) {
+        console.error('Error creating team invite:', error);
+        return res.status(500).json({ error: 'Failed to create team invite' });
+    }
+});
+
+app.post('/api/team/invites/accept', async (req: Request, res: Response) => {
+    const parsedBody = acceptTeamInviteSchema.safeParse(req.body);
+    if (!parsedBody.success) {
+        return res.status(400).json({ error: 'Invalid request payload', details: formatZodError(parsedBody.error) });
+    }
+
+    const user = getAuthenticatedUser(req);
+    const userEmail = user.email ? normalizeInviteEmail(user.email) : '';
+    if (!userEmail) {
+        return res.status(400).json({ error: 'Authenticated user email is required to accept invites' });
+    }
+
+    const tokenHash = hashInviteToken(parsedBody.data.token);
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        const inviteRes = await client.query<{
+            id: string;
+            workspace_id: string;
+            email_norm: string;
+            role: 'admin' | 'member';
+            status: 'pending' | 'accepted' | 'cancelled' | 'expired';
+            expires_at: string;
+            owner_plan: string;
+        }>(
+            `
+            SELECT
+                wi.id,
+                wi.workspace_id,
+                wi.email_norm,
+                wi.role::text AS role,
+                wi.status::text AS status,
+                wi.expires_at,
+                owner.stripe_plan AS owner_plan
+            FROM workspace_invites wi
+            JOIN workspaces w ON w.id = wi.workspace_id
+            JOIN users owner ON owner.id = w.owner_user_id
+            WHERE wi.token_hash = $1
+            FOR UPDATE
+        `,
+            [tokenHash]
+        );
+
+        if ((inviteRes.rowCount ?? 0) === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Invite not found' });
+        }
+
+        const invite = inviteRes.rows[0];
+        if (invite.status !== 'pending') {
+            await client.query('ROLLBACK');
+            return res.status(409).json({ error: 'Invite is no longer pending' });
+        }
+
+        if (new Date(invite.expires_at).getTime() <= Date.now()) {
+            await client.query(
+                `
+                UPDATE workspace_invites
+                SET status = 'expired'
+                WHERE id = $1
+            `,
+                [invite.id]
+            );
+            await client.query('COMMIT');
+            return res.status(410).json({ error: 'Invite has expired' });
+        }
+
+        if (invite.email_norm !== userEmail) {
+            await client.query('ROLLBACK');
+            return res.status(403).json({ error: 'Invite email does not match authenticated user' });
+        }
+
+        const ownerPlan = normalizePlan(invite.owner_plan);
+        if (!planSupportsCollaboration(ownerPlan)) {
+            await client.query('ROLLBACK');
+            return res.status(403).json({ error: 'Workspace plan does not support team collaboration' });
+        }
+
+        const existingMemberRes = await client.query(
+            `
+            SELECT role
+            FROM workspace_members
+            WHERE workspace_id = $1
+              AND user_id = $2
+            LIMIT 1
+        `,
+            [invite.workspace_id, user.id]
+        );
+
+        if ((existingMemberRes.rowCount ?? 0) === 0) {
+            const countRes = await client.query<{ member_count: string }>(
+                `
+                SELECT COUNT(*)::int AS member_count
+                FROM workspace_members
+                WHERE workspace_id = $1
+            `,
+                [invite.workspace_id]
+            );
+            const memberCount = Number(countRes.rows[0]?.member_count ?? 0);
+            const seatLimit = getSeatLimitForPlan(ownerPlan);
+            if (memberCount >= seatLimit) {
+                await client.query('ROLLBACK');
+                return res.status(409).json({ error: 'Seat limit reached for current plan' });
+            }
+
+            await client.query(
+                `
+                INSERT INTO workspace_members (workspace_id, user_id, role)
+                VALUES ($1, $2, $3)
+                ON CONFLICT (workspace_id, user_id) DO NOTHING
+            `,
+                [invite.workspace_id, user.id, invite.role]
+            );
+        }
+
+        await client.query(
+            `
+            UPDATE workspace_invites
+            SET
+                status = 'accepted',
+                accepted_by_user_id = $1,
+                accepted_at = NOW()
+            WHERE id = $2
+        `,
+            [user.id, invite.id]
+        );
+
+        await client.query(
+            `
+            UPDATE users
+            SET current_workspace_id = $1
+            WHERE id = $2
+        `,
+            [invite.workspace_id, user.id]
+        );
+
+        await client.query('COMMIT');
+        return res.json({ success: true, workspaceId: invite.workspace_id });
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('Error accepting team invite:', error);
+        return res.status(500).json({ error: 'Failed to accept invite' });
+    } finally {
+        client.release();
+    }
+});
+
+app.delete('/api/team/invites/:inviteId', async (req: Request, res: Response) => {
+    const parsedParams = teamInviteIdParamSchema.safeParse(req.params);
+    if (!parsedParams.success) {
+        return res.status(400).json({ error: 'Invalid invite id' });
+    }
+
+    try {
+        const user = getAuthenticatedUser(req);
+        const context = await getWorkspaceContextForUser(user.id);
+        if (!context.collaborationEnabled) {
+            return res.status(403).json({ error: 'Plan does not support team collaboration' });
+        }
+        if (!canManageInvites(context.role)) {
+            return res.status(403).json({ error: 'Insufficient permissions to cancel invites' });
+        }
+
+        const cancelRes = await pool.query(
+            `
+            UPDATE workspace_invites
+            SET status = 'cancelled'
+            WHERE id = $1
+              AND workspace_id = $2
+              AND status = 'pending'
+            RETURNING id
+        `,
+            [parsedParams.data.inviteId, context.workspaceId]
+        );
+
+        if ((cancelRes.rowCount ?? 0) === 0) {
+            return res.status(404).json({ error: 'Pending invite not found' });
+        }
+
+        return res.json({ success: true });
+    } catch (error) {
+        console.error('Error cancelling invite:', error);
+        return res.status(500).json({ error: 'Failed to cancel invite' });
+    }
+});
+
+app.patch('/api/team/members/:memberUserId', async (req: Request, res: Response) => {
+    const parsedParams = teamMemberUserIdParamSchema.safeParse(req.params);
+    if (!parsedParams.success) {
+        return res.status(400).json({ error: 'Invalid member user id' });
+    }
+
+    const parsedBody = updateTeamMemberRoleSchema.safeParse(req.body);
+    if (!parsedBody.success) {
+        return res.status(400).json({ error: 'Invalid request payload', details: formatZodError(parsedBody.error) });
+    }
+
+    try {
+        const user = getAuthenticatedUser(req);
+        const context = await getWorkspaceContextForUser(user.id);
+        if (!context.collaborationEnabled) {
+            return res.status(403).json({ error: 'Plan does not support team collaboration' });
+        }
+        if (!canChangeMemberRole(context.role)) {
+            return res.status(403).json({ error: 'Insufficient permissions to change member roles' });
+        }
+        if (parsedParams.data.memberUserId === user.id) {
+            return res.status(403).json({ error: 'Owner role cannot be changed' });
+        }
+
+        const targetMemberRes = await pool.query<{ role: string }>(
+            `
+            SELECT role::text AS role
+            FROM workspace_members
+            WHERE workspace_id = $1
+              AND user_id = $2
+            LIMIT 1
+        `,
+            [context.workspaceId, parsedParams.data.memberUserId]
+        );
+        if ((targetMemberRes.rowCount ?? 0) === 0) {
+            return res.status(404).json({ error: 'Workspace member not found' });
+        }
+
+        const targetRole = targetMemberRes.rows[0].role;
+        if (targetRole === 'owner') {
+            return res.status(403).json({ error: 'Owner role cannot be changed' });
+        }
+
+        const updateRes = await pool.query<{ user_id: string; role: string }>(
+            `
+            UPDATE workspace_members
+            SET role = $1
+            WHERE workspace_id = $2
+              AND user_id = $3
+            RETURNING user_id, role::text AS role
+        `,
+            [parsedBody.data.role, context.workspaceId, parsedParams.data.memberUserId]
+        );
+
+        return res.json({
+            success: true,
+            member: updateRes.rows[0]
+        });
+    } catch (error) {
+        console.error('Error updating member role:', error);
+        return res.status(500).json({ error: 'Failed to update member role' });
+    }
+});
+
+app.delete('/api/team/members/:memberUserId', async (req: Request, res: Response) => {
+    const parsedParams = teamMemberUserIdParamSchema.safeParse(req.params);
+    if (!parsedParams.success) {
+        return res.status(400).json({ error: 'Invalid member user id' });
+    }
+
+    try {
+        const user = getAuthenticatedUser(req);
+        const context = await getWorkspaceContextForUser(user.id);
+        if (!context.collaborationEnabled) {
+            return res.status(403).json({ error: 'Plan does not support team collaboration' });
+        }
+
+        const targetMemberRes = await pool.query<{ role: string }>(
+            `
+            SELECT role::text AS role
+            FROM workspace_members
+            WHERE workspace_id = $1
+              AND user_id = $2
+            LIMIT 1
+        `,
+            [context.workspaceId, parsedParams.data.memberUserId]
+        );
+        if ((targetMemberRes.rowCount ?? 0) === 0) {
+            return res.status(404).json({ error: 'Workspace member not found' });
+        }
+
+        const targetRoleRaw = targetMemberRes.rows[0].role;
+        const targetRole: WorkspaceRole = isWorkspaceRole(targetRoleRaw) ? targetRoleRaw : 'member';
+        if (!canRemoveMember(context.role, targetRole, user.id, parsedParams.data.memberUserId)) {
+            return res.status(403).json({ error: 'Insufficient permissions to remove this member' });
+        }
+
+        await pool.query(
+            `
+            DELETE FROM workspace_members
+            WHERE workspace_id = $1
+              AND user_id = $2
+        `,
+            [context.workspaceId, parsedParams.data.memberUserId]
+        );
+
+        await setFallbackCurrentWorkspaceForUser(parsedParams.data.memberUserId);
+
+        return res.json({ success: true });
+    } catch (error) {
+        console.error('Error removing workspace member:', error);
+        return res.status(500).json({ error: 'Failed to remove workspace member' });
+    }
+});
+
 app.get('/api/user/youtube/connect-url', async (req: Request, res: Response) => {
     try {
         const user = getAuthenticatedUser(req);
-        const url = await getAuthUrlForUser(user.id);
+        const context = await getWorkspaceContextForUser(user.id);
+        if (context.role !== 'owner' || context.ownerUserId !== user.id) {
+            return res.status(403).json({ error: 'Only workspace owner can manage YouTube connection' });
+        }
+        const url = await getAuthUrlForUser(context.ownerUserId);
         return res.json({ url });
     } catch (error) {
         console.error('Error generating YouTube OAuth URL:', error);
@@ -294,34 +1064,34 @@ app.get('/api/user/youtube/connect-url', async (req: Request, res: Response) => 
 app.get('/api/dashboard', async (req: Request, res: Response) => {
     try {
         const user = getAuthenticatedUser(req);
-        const userId = user.id;
+        const context = await getWorkspaceContextForUser(user.id);
 
         const activeRes = await pool.query(
             `
             SELECT * FROM tests
-            WHERE user_id = $1 AND status = 'active'
+            WHERE workspace_id = $1 AND status = 'active'
             ORDER BY start_date DESC
         `,
-            [userId]
+            [context.workspaceId]
         );
 
         const finishedRes = await pool.query(
             `
             SELECT * FROM tests
-            WHERE user_id = $1 AND status = 'finished'
+            WHERE workspace_id = $1 AND status = 'finished'
             ORDER BY start_date DESC
             LIMIT 5
         `,
-            [userId]
+            [context.workspaceId]
         );
 
         const finishedAllRes = await pool.query(
             `
             SELECT id, start_date, winner_variant, winner_mode, review_required
             FROM tests
-            WHERE user_id = $1 AND status = 'finished'
+            WHERE workspace_id = $1 AND status = 'finished'
         `,
-            [userId]
+            [context.workspaceId]
         );
 
         const finishedDailyRes = await pool.query(
@@ -337,10 +1107,10 @@ app.get('/api/dashboard', async (req: Request, res: Response) => {
                 dr.impressions_ctr
             FROM daily_results dr
             JOIN tests t ON t.id = dr.test_id
-            WHERE t.user_id = $1 AND t.status = 'finished'
+            WHERE t.workspace_id = $1 AND t.status = 'finished'
             ORDER BY dr.date ASC
         `,
-            [userId]
+            [context.workspaceId]
         );
 
         const finishedMetrics = summarizeFinishedTestMetrics(
@@ -353,7 +1123,7 @@ app.get('/api/dashboard', async (req: Request, res: Response) => {
             activeTests: activeRes.rows,
             finishedTests: finishedRes.rows,
             metrics: {
-                activeCount: activeRes.rowCount,
+                activeCount: Number(activeRes.rowCount ?? 0),
                 avgCtrLift: finishedMetrics.avgCtrLift,
                 extraClicks: finishedMetrics.extraClicks,
                 avgWtpiLift: finishedMetrics.avgWtpiLift,
@@ -371,17 +1141,18 @@ app.get('/api/user/settings', async (req: Request, res: Response) => {
     try {
         const user = getAuthenticatedUser(req);
         const userId = user.id;
+        const context = await getWorkspaceContextForUser(userId);
 
         const userRes = await pool.query(
             `
-            SELECT id, email, stripe_plan, yt_access_token, yt_refresh_token, created_at
+            SELECT id, email, created_at
             FROM users
             WHERE id = $1
         `,
             [userId]
         );
 
-        if (userRes.rowCount === 0) {
+        if ((userRes.rowCount ?? 0) === 0) {
             return res.status(404).json({ error: 'User not found' });
         }
 
@@ -391,18 +1162,55 @@ app.get('/api/user/settings', async (req: Request, res: Response) => {
                 COUNT(*)::int AS total_tests,
                 COUNT(*) FILTER (WHERE status = 'active')::int AS active_tests
             FROM tests
-            WHERE user_id = $1
+            WHERE workspace_id = $1
         `,
-            [userId]
+            [context.workspaceId]
+        );
+
+        await pool.query(
+            `
+            UPDATE workspace_invites
+            SET status = 'expired'
+            WHERE workspace_id = $1
+              AND status = 'pending'
+              AND expires_at <= NOW()
+        `,
+            [context.workspaceId]
+        );
+
+        const pendingInvitesRes = await pool.query<{ pending_count: string }>(
+            `
+            SELECT COUNT(*)::int AS pending_count
+            FROM workspace_invites
+            WHERE workspace_id = $1
+              AND status = 'pending'
+              AND expires_at > NOW()
+        `,
+            [context.workspaceId]
+        );
+
+        const ownerRes = await pool.query<{
+            yt_access_token: string | null;
+            yt_refresh_token: string | null;
+        }>(
+            `
+            SELECT yt_access_token, yt_refresh_token
+            FROM users
+            WHERE id = $1
+        `,
+            [context.ownerUserId]
         );
 
         const dbUser = userRes.rows[0];
         const usageRow = usageRes.rows[0] ?? { total_tests: 0, active_tests: 0 };
+        const ownerRow = ownerRes.rows[0] ?? { yt_access_token: null, yt_refresh_token: null };
+        const memberCount = await getWorkspaceMemberCount(context.workspaceId);
+        const pendingInvitesCount = Number(pendingInvitesRes.rows[0]?.pending_count ?? 0);
 
         let channelId = '';
-        if (dbUser.yt_access_token) {
+        if (ownerRow.yt_access_token) {
             try {
-                const channelResponse = await getChannelVideos(userId, 1);
+                const channelResponse = await getChannelVideos(context.ownerUserId, 1);
                 channelId = channelResponse.channelId;
             } catch {
                 channelId = '';
@@ -413,15 +1221,28 @@ app.get('/api/user/settings', async (req: Request, res: Response) => {
             user: {
                 id: dbUser.id,
                 email: dbUser.email,
-                plan: dbUser.stripe_plan || 'free',
+                plan: context.ownerPlan,
                 createdAt: dbUser.created_at
             },
-            plan: dbUser.stripe_plan || 'free',
-            isYoutubeConnected: Boolean(dbUser.yt_access_token),
+            plan: context.ownerPlan,
+            isYoutubeConnected: Boolean(ownerRow.yt_access_token),
             channelId,
             usage: {
                 activeTests: Number(usageRow.active_tests || 0),
                 totalTests: Number(usageRow.total_tests || 0)
+            },
+            workspace: {
+                id: context.workspaceId,
+                name: context.workspaceName,
+                role: context.role,
+                ownerUserId: context.ownerUserId,
+                ownerEmail: context.ownerEmail,
+                collaborationEnabled: context.collaborationEnabled,
+                seatLimit: context.seatLimit,
+                memberCount,
+                pendingInvitesCount,
+                canManageInvites: context.collaborationEnabled && canManageInvites(context.role),
+                canManageMembers: context.collaborationEnabled && (context.role === 'owner' || context.role === 'admin')
             }
         });
     } catch (error) {
@@ -434,12 +1255,14 @@ app.post('/api/tests', async (req: Request, res: Response) => {
     try {
         const payload = createTestSchema.parse(req.body);
         const user = getAuthenticatedUser(req);
-        const userId = user.id;
+        const context = await getWorkspaceContextForUser(user.id);
 
         const result = await pool.query(
             `
             INSERT INTO tests (
                 user_id,
+                workspace_id,
+                created_by_user_id,
                 video_id,
                 title_a,
                 title_b,
@@ -448,11 +1271,13 @@ app.post('/api/tests', async (req: Request, res: Response) => {
                 duration_days,
                 start_date
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
             RETURNING *
         `,
             [
-                userId,
+                context.ownerUserId,
+                context.workspaceId,
+                user.id,
                 payload.videoId,
                 payload.titleA,
                 payload.titleB,
@@ -483,15 +1308,11 @@ app.get('/api/tests/:id/results', async (req: Request, res: Response) => {
 
     try {
         const user = getAuthenticatedUser(req);
-        const userId = user.id;
         const testId = parsedParams.data.id;
 
-        const testRes = await pool.query(
-            'SELECT * FROM tests WHERE id = $1 AND user_id = $2',
-            [testId, userId]
-        );
-        if (testRes.rowCount === 0) {
-            return res.status(404).json({ error: 'Test not found or not owned by user' });
+        const test = await getAccessibleTestForUser(testId, user.id);
+        if (!test) {
+            return res.status(404).json({ error: 'Test not found or not accessible to user' });
         }
 
         const resultsRes = await pool.query(
@@ -511,7 +1332,6 @@ app.get('/api/tests/:id/results', async (req: Request, res: Response) => {
             [testId]
         );
 
-        const test = testRes.rows[0];
         const dailyResults = resultsRes.rows;
         const performance = computeVariantPerformance(dailyResults, test.start_date, scoringConfig.weights);
         const computedDecision = evaluateWinnerDecision(
@@ -572,16 +1392,14 @@ app.post('/api/tests/:id/apply-winner', async (req: Request, res: Response) => {
 
     try {
         const user = getAuthenticatedUser(req);
-        const userId = user.id;
         const testId = parsedParams.data.id;
         const variant = parsedBody.data.variant;
 
-        const testRes = await pool.query('SELECT * FROM tests WHERE id = $1 AND user_id = $2', [testId, userId]);
-        if (testRes.rowCount === 0) {
-            return res.status(404).json({ error: 'Test not found or not owned by user' });
+        const test = await getAccessibleTestForUser(testId, user.id);
+        if (!test) {
+            return res.status(404).json({ error: 'Test not found or not accessible to user' });
         }
 
-        const test = testRes.rows[0];
         const selectedAssets = buildManualVariantAssets(
             variant,
             test.title_a,
@@ -641,17 +1459,18 @@ app.post('/api/tests/:id/apply-winner', async (req: Request, res: Response) => {
 app.get('/api/youtube/videos', async (req: Request, res: Response) => {
     try {
         const user = getAuthenticatedUser(req);
-        const userId = user.id;
+        const context = await getWorkspaceContextForUser(user.id);
+        const ownerUserId = context.ownerUserId;
 
         const userRes = await pool.query(
             'SELECT id FROM users WHERE id = $1 AND yt_access_token IS NOT NULL',
-            [userId]
+            [ownerUserId]
         );
-        if (userRes.rowCount === 0) {
-            return res.status(404).json({ error: 'User not found or YouTube not connected' });
+        if ((userRes.rowCount ?? 0) === 0) {
+            return res.status(404).json({ error: 'Workspace YouTube account is not connected' });
         }
 
-        const { channelId, videos } = await getChannelVideos(userId, 12);
+        const { channelId, videos } = await getChannelVideos(ownerUserId, 12);
         return res.json({ channelId, videos });
     } catch (error) {
         console.error('Error fetching channel videos:', error);
@@ -662,18 +1481,19 @@ app.get('/api/youtube/videos', async (req: Request, res: Response) => {
 app.get('/api/youtube/video/:id', async (req: Request, res: Response) => {
     try {
         const user = getAuthenticatedUser(req);
-        const userId = user.id;
+        const context = await getWorkspaceContextForUser(user.id);
+        const ownerUserId = context.ownerUserId;
         const videoId = req.params.id;
 
         const userRes = await pool.query(
             'SELECT id FROM users WHERE id = $1 AND yt_access_token IS NOT NULL',
-            [userId]
+            [ownerUserId]
         );
-        if (userRes.rowCount === 0) {
-            return res.status(404).json({ error: 'User not found or YouTube not connected' });
+        if ((userRes.rowCount ?? 0) === 0) {
+            return res.status(404).json({ error: 'Workspace YouTube account is not connected' });
         }
 
-        const details = await getVideoDetails(userId, videoId);
+        const details = await getVideoDetails(ownerUserId, videoId);
         return res.json(details);
     } catch (error) {
         console.error('Error fetching video metadata:', error);
@@ -689,18 +1509,13 @@ app.post('/api/tests/:id/sync', async (req: Request, res: Response) => {
 
     try {
         const user = getAuthenticatedUser(req);
-        const userId = user.id;
         const testId = parsedParams.data.id;
 
-        const testRes = await pool.query(
-            'SELECT * FROM tests WHERE id = $1 AND user_id = $2',
-            [testId, userId]
-        );
-        if (testRes.rowCount === 0) {
-            return res.status(404).json({ error: 'Test not found' });
+        const test = await getAccessibleTestForUser(testId, user.id);
+        if (!test) {
+            return res.status(404).json({ error: 'Test not found or not accessible to user' });
         }
 
-        const test = testRes.rows[0];
         const startDate = new Date(test.start_date);
         startDate.setHours(0, 0, 0, 0);
 
@@ -735,11 +1550,14 @@ app.post('/api/tests/:id/sync', async (req: Request, res: Response) => {
 app.delete('/api/user/youtube', async (req: Request, res: Response) => {
     try {
         const user = getAuthenticatedUser(req);
-        const userId = user.id;
+        const context = await getWorkspaceContextForUser(user.id);
+        if (context.role !== 'owner' || context.ownerUserId !== user.id) {
+            return res.status(403).json({ error: 'Only workspace owner can disconnect YouTube account' });
+        }
 
         await pool.query(
             'UPDATE users SET yt_access_token = NULL, yt_refresh_token = NULL WHERE id = $1',
-            [userId]
+            [context.ownerUserId]
         );
         return res.json({ success: true, message: 'YouTube account disconnected' });
     } catch (error) {

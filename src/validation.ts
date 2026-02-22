@@ -4,6 +4,7 @@ const YOUTUBE_ID_REGEX = /^[a-zA-Z0-9_-]{6,20}$/;
 const PLAIN_VIDEO_ID_REGEX = /^[a-zA-Z0-9_-]{3,50}$/;
 const ALLOWED_DURATIONS = [4, 7, 14] as const;
 const DATA_IMAGE_URL_REGEX = /^data:image\/(png|jpeg|jpg|webp);base64,([A-Za-z0-9+/=]+)$/i;
+const TEAM_MANAGED_ROLES = ['admin', 'member'] as const;
 
 const MAX_THUMBNAIL_UPLOAD_BYTES = 2 * 1024 * 1024;
 
@@ -125,6 +126,27 @@ export const testIdParamSchema = z.object({
 
 export const applyWinnerSchema = z.object({
     variant: z.enum(['A', 'B'], { message: 'variant must be A or B' })
+});
+
+export const createTeamInviteSchema = z.object({
+    email: z.string().trim().email('email must be valid'),
+    role: z.enum(TEAM_MANAGED_ROLES, { message: 'role must be admin or member' })
+});
+
+export const acceptTeamInviteSchema = z.object({
+    token: z.string().trim().min(12, 'token is required').max(512, 'token is invalid')
+});
+
+export const teamInviteIdParamSchema = z.object({
+    inviteId: z.string().uuid('Invalid invite id')
+});
+
+export const teamMemberUserIdParamSchema = z.object({
+    memberUserId: z.string().uuid('Invalid member user id')
+});
+
+export const updateTeamMemberRoleSchema = z.object({
+    role: z.enum(TEAM_MANAGED_ROLES, { message: 'role must be admin or member' })
 });
 
 export function formatZodError(error: z.ZodError): string {
