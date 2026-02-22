@@ -1,5 +1,6 @@
 export type TestStatus = 'active' | 'finished';
 export type TestVariant = 'A' | 'B';
+export type WinnerMode = 'auto' | 'manual' | 'inconclusive' | 'pending';
 
 export interface TestRecord {
     id: string;
@@ -14,12 +15,23 @@ export interface TestRecord {
     status: TestStatus;
     current_variant: TestVariant;
     created_at: string;
+    winner_variant?: TestVariant | null;
+    winner_mode?: WinnerMode | null;
+    winner_confidence?: number | null;
+    winner_score_a?: number | null;
+    winner_score_b?: number | null;
+    decision_reason?: string | null;
+    review_required?: boolean;
+    finished_at?: string | null;
 }
 
 export interface DashboardMetrics {
     activeCount: number;
     avgCtrLift: number;
     extraClicks: number;
+    avgWtpiLift: number;
+    extraWatchMinutes: number;
+    inconclusiveCount: number;
 }
 
 export interface DashboardResponse {
@@ -65,6 +77,10 @@ export interface TestDailyResult {
     date: string;
     impressions: number;
     clicks: number;
+    views: number;
+    estimated_minutes_watched: number;
+    average_view_duration_seconds: number;
+    impressions_ctr: number;
 }
 
 export interface VariantResults {
@@ -73,9 +89,39 @@ export interface VariantResults {
     ctr: number;
 }
 
+export interface VariantStats {
+    variant: TestVariant;
+    exposureDays: number;
+    impressions: number;
+    estimatedClicks: number;
+    ctr: number;
+    impressionsCtr: number;
+    views: number;
+    estimatedMinutesWatched: number;
+    averageViewDurationSeconds: number;
+    wtpi: number;
+    score: number;
+    ctrNorm: number;
+    wtpiNorm: number;
+}
+
+export interface DecisionSummary {
+    winnerVariant: TestVariant | null;
+    winnerMode: WinnerMode;
+    confidence: number;
+    pValue: number;
+    reviewRequired: boolean;
+    reason: string;
+}
+
 export interface TestResultsResponse {
     test: TestRecord;
     dailyResults: TestDailyResult[];
     results_a: VariantResults;
     results_b: VariantResults;
+    variant_stats: {
+        a: VariantStats;
+        b: VariantStats;
+    };
+    decision: DecisionSummary;
 }

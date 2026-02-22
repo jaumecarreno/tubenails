@@ -5,6 +5,22 @@ import * as path from 'path';
 
 const DATA_IMAGE_URL_REGEX = /^data:(image\/(?:png|jpeg|jpg|webp));base64,([A-Za-z0-9+/=]+)$/i;
 
+interface ParsedDataImage {
+    mimeType: string;
+    payload: string;
+}
+
+export interface DailyAnalyticsPoint {
+    impressions: number;
+    impressionsCtr: number;
+    views: number;
+    estimatedMinutesWatched: number;
+    averageViewDurationSeconds: number;
+    qualityAvailable: boolean;
+    metricVersion: number;
+    usedMetrics: string;
+}
+
 function extensionFromMimeType(mimeType: string): string {
     const normalized = mimeType.toLowerCase();
     if (normalized.includes('png')) {
@@ -16,7 +32,7 @@ function extensionFromMimeType(mimeType: string): string {
     return 'jpg';
 }
 
-function parseDataImageUrl(source: string): { mimeType: string; payload: string } | null {
+function parseDataImageUrl(source: string): ParsedDataImage | null {
     const match = source.match(DATA_IMAGE_URL_REGEX);
     if (!match) {
         return null;
@@ -25,6 +41,11 @@ function parseDataImageUrl(source: string): { mimeType: string; payload: string 
         mimeType: match[1],
         payload: match[2]
     };
+}
+
+function toSafeNumber(value: unknown): number {
+    const numberValue = Number(value);
+    return Number.isFinite(numberValue) ? numberValue : 0;
 }
 
 async function writeThumbnailSourceToTemp(source: string, filepath: string): Promise<void> {
@@ -61,6 +82,37 @@ async function writeThumbnailSourceToTemp(source: string, filepath: string): Pro
     }
 
     await fs.promises.writeFile(filepath, buffer);
+}
+
+function parseAnalyticsRow(
+    row: Array<string | number>,
+    metrics: string[]
+): DailyAnalyticsPoint {
+    const offset = 2; // dimensions day,video
+    const metricValueByName = new Map<string, number>();
+    metrics.forEach((metric, index) => {
+        metricValueByName.set(metric, toSafeNumber(row[offset + index]));
+    });
+
+    const impressions = metricValueByName.get('impressions') ?? 0;
+    const impressionsCtr = metricValueByName.get('impressionsCtr') ?? 0;
+    const views = metricValueByName.get('views') ?? 0;
+    const estimatedMinutesWatched = metricValueByName.get('estimatedMinutesWatched') ?? 0;
+    const averageViewDurationSecondsFromApi = metricValueByName.get('averageViewDuration') ?? 0;
+    const averageViewDurationSeconds = averageViewDurationSecondsFromApi > 0
+        ? averageViewDurationSecondsFromApi
+        : (views > 0 ? (estimatedMinutesWatched * 60) / views : 0);
+
+    return {
+        impressions,
+        impressionsCtr,
+        views,
+        estimatedMinutesWatched,
+        averageViewDurationSeconds,
+        qualityAvailable: metrics.includes('estimatedMinutesWatched'),
+        metricVersion: 2,
+        usedMetrics: metrics.join(',')
+    };
 }
 
 export async function getChannelVideos(userId: string, maxResults: number = 10) {
@@ -183,18 +235,39 @@ export async function updateVideoTitle(userId: string, videoId: string, newTitle
     return res.data;
 }
 
-export async function getDailyAnalytics(userId: string, videoId: string, dateStr: string) {
+export async function getDailyAnalytics(userId: string, videoId: string, dateStr: string): Promise<DailyAnalyticsPoint | null> {
     const auth = await getClientForUser(userId);
     const analytics = google.youtubeAnalytics({ version: 'v2', auth });
 
-    const res = await analytics.reports.query({
-        ids: 'channel==MINE',
-        startDate: dateStr,
-        endDate: dateStr,
-        metrics: 'impressions,impressionsCtr',
-        dimensions: 'day,video',
-        filters: `video==${videoId}`
-    });
+    const metricAttempts: string[][] = [
+        ['impressions', 'impressionsCtr', 'views', 'estimatedMinutesWatched', 'averageViewDuration'],
+        ['impressions', 'impressionsCtr', 'views', 'estimatedMinutesWatched'],
+        ['impressions', 'impressionsCtr', 'views']
+    ];
 
-    return res.data;
+    let lastError: unknown = null;
+    for (const metrics of metricAttempts) {
+        try {
+            const res = await analytics.reports.query({
+                ids: 'channel==MINE',
+                startDate: dateStr,
+                endDate: dateStr,
+                metrics: metrics.join(','),
+                dimensions: 'day,video',
+                filters: `video==${videoId}`
+            });
+
+            if (!res.data.rows || res.data.rows.length === 0) {
+                return null;
+            }
+
+            const firstRow = res.data.rows[0];
+            return parseAnalyticsRow(firstRow as Array<string | number>, metrics);
+        } catch (error) {
+            lastError = error;
+            continue;
+        }
+    }
+
+    throw lastError ?? new Error('Failed fetching YouTube analytics');
 }

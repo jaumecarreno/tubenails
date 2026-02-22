@@ -6,9 +6,17 @@ import { ZodError } from 'zod';
 import { getAuthUrlForUser, handleGoogleCallback } from './auth';
 import { pool, setupDatabase } from './db';
 import { startCronJobs } from './cron';
-import { splitDailyResultsByVariant, summarizeFinishedTestMetrics, computeEstimatedClicks } from './metrics';
-import { createTestSchema, formatZodError, testIdParamSchema } from './validation';
-import { getChannelVideos, getDailyAnalytics, getVideoDetails } from './youtube';
+import {
+    computeEstimatedClicks,
+    computeVariantPerformance,
+    evaluateWinnerDecision,
+    ScoringConfig,
+    ScoreWeights,
+    summarizeFinishedTestMetrics,
+    VariantId
+} from './metrics';
+import { applyWinnerSchema, createTestSchema, formatZodError, testIdParamSchema } from './validation';
+import { getChannelVideos, getDailyAnalytics, getVideoDetails, updateVideoThumbnail, updateVideoTitle } from './youtube';
 
 dotenv.config();
 
@@ -22,6 +30,19 @@ function getRequiredEnv(name: string): string {
 
 function getErrorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
+}
+
+function getEnvNumber(name: string, fallback: number): number {
+    const parsed = Number(process.env[name]);
+    return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function getEnvBoolean(name: string, fallback: boolean): boolean {
+    const raw = process.env[name];
+    if (!raw) {
+        return fallback;
+    }
+    return raw.toLowerCase() === 'true';
 }
 
 function normalizeOrigin(origin: string): string | null {
@@ -47,6 +68,28 @@ function buildAllowedOrigins(frontendUrlEnv: string | undefined): Set<string> {
     return new Set([...configuredOrigins, ...defaults]);
 }
 
+function getScoringConfig(): ScoringConfig {
+    const weights: ScoreWeights = {
+        ctrWeight: getEnvNumber('SCORING_CTR_WEIGHT', 0.70),
+        qualityWeight: getEnvNumber('SCORING_QUALITY_WEIGHT', 0.30)
+    };
+
+    return {
+        minImpressionsPerVariant: getEnvNumber('MIN_IMPRESSIONS_PER_VARIANT', 1500),
+        minConfidence: getEnvNumber('MIN_CONFIDENCE', 0.95),
+        minCtrDeltaPctPoints: getEnvNumber('MIN_CTR_DELTA_PCT_POINTS', 0.20),
+        minScoreDelta: getEnvNumber('MIN_SCORE_DELTA', 0.02),
+        weights
+    };
+}
+
+function toVariantId(value: unknown): VariantId | null {
+    if (value === 'A' || value === 'B') {
+        return value;
+    }
+    return null;
+}
+
 interface AuthenticatedRequest extends Request {
     user: User;
 }
@@ -59,11 +102,75 @@ const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3001';
 const PORT = Number(process.env.PORT || 3000);
 const JSON_BODY_LIMIT = process.env.JSON_BODY_LIMIT || '6mb';
 const allowedOrigins = buildAllowedOrigins(process.env.FRONTEND_URL);
+const scoringConfig = getScoringConfig();
+const scoringEngineV2Enabled = getEnvBoolean('SCORING_ENGINE_V2_ENABLED', false);
 
 const supabaseAuth = createClient(
     getRequiredEnv('SUPABASE_URL'),
     getRequiredEnv('SUPABASE_ANON_KEY')
 );
+
+async function persistDailyAnalyticsForDate(
+    testId: string,
+    userId: string,
+    videoId: string,
+    dateStr: string
+) {
+    const analyticsPoint = await getDailyAnalytics(userId, videoId, dateStr);
+    if (!analyticsPoint) {
+        return;
+    }
+
+    const estimatedClicks = computeEstimatedClicks(analyticsPoint.impressions, analyticsPoint.impressionsCtr);
+    await pool.query(
+        `
+        INSERT INTO daily_results (
+            test_id,
+            date,
+            impressions,
+            clicks,
+            impressions_ctr,
+            views,
+            estimated_minutes_watched,
+            average_view_duration_seconds,
+            metric_version
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        ON CONFLICT (test_id, date)
+        DO UPDATE SET
+            impressions = EXCLUDED.impressions,
+            clicks = EXCLUDED.clicks,
+            impressions_ctr = EXCLUDED.impressions_ctr,
+            views = EXCLUDED.views,
+            estimated_minutes_watched = EXCLUDED.estimated_minutes_watched,
+            average_view_duration_seconds = EXCLUDED.average_view_duration_seconds,
+            metric_version = EXCLUDED.metric_version
+    `,
+        [
+            testId,
+            dateStr,
+            analyticsPoint.impressions,
+            estimatedClicks,
+            analyticsPoint.impressionsCtr,
+            analyticsPoint.views,
+            analyticsPoint.estimatedMinutesWatched,
+            analyticsPoint.averageViewDurationSeconds,
+            analyticsPoint.metricVersion
+        ]
+    );
+}
+
+function buildManualVariantAssets(
+    variant: VariantId,
+    titleA: string,
+    titleB: string,
+    thumbnailA: string,
+    thumbnailB: string
+) {
+    return variant === 'A'
+        ? { title: titleA, thumbnail: thumbnailA }
+        : { title: titleB, thumbnail: thumbnailB };
+}
 
 export const app = express();
 app.set('trust proxy', 1);
@@ -87,10 +194,9 @@ app.use(cors({
 app.use(express.json({ limit: JSON_BODY_LIMIT }));
 
 app.get('/api/health', (_req: Request, res: Response) => {
-    res.json({ status: 'ok' });
+    res.json({ status: 'ok', scoringV2Enabled: scoringEngineV2Enabled });
 });
 
-// Public callback endpoint used by Google OAuth redirect.
 app.get('/api/auth/google/callback', async (req: Request, res: Response) => {
     const code = req.query.code as string | undefined;
     const state = req.query.state as string | undefined;
@@ -211,7 +317,7 @@ app.get('/api/dashboard', async (req: Request, res: Response) => {
 
         const finishedAllRes = await pool.query(
             `
-            SELECT id, start_date
+            SELECT id, start_date, winner_variant, winner_mode, review_required
             FROM tests
             WHERE user_id = $1 AND status = 'finished'
         `,
@@ -220,7 +326,15 @@ app.get('/api/dashboard', async (req: Request, res: Response) => {
 
         const finishedDailyRes = await pool.query(
             `
-            SELECT dr.test_id, dr.date, dr.impressions, dr.clicks
+            SELECT
+                dr.test_id,
+                dr.date,
+                dr.impressions,
+                dr.clicks,
+                dr.views,
+                dr.estimated_minutes_watched,
+                dr.average_view_duration_seconds,
+                dr.impressions_ctr
             FROM daily_results dr
             JOIN tests t ON t.id = dr.test_id
             WHERE t.user_id = $1 AND t.status = 'finished'
@@ -231,7 +345,8 @@ app.get('/api/dashboard', async (req: Request, res: Response) => {
 
         const finishedMetrics = summarizeFinishedTestMetrics(
             finishedAllRes.rows,
-            finishedDailyRes.rows
+            finishedDailyRes.rows,
+            scoringConfig.weights
         );
 
         return res.json({
@@ -240,7 +355,10 @@ app.get('/api/dashboard', async (req: Request, res: Response) => {
             metrics: {
                 activeCount: activeRes.rowCount,
                 avgCtrLift: finishedMetrics.avgCtrLift,
-                extraClicks: finishedMetrics.extraClicks
+                extraClicks: finishedMetrics.extraClicks,
+                avgWtpiLift: finishedMetrics.avgWtpiLift,
+                extraWatchMinutes: finishedMetrics.extraWatchMinutes,
+                inconclusiveCount: finishedMetrics.inconclusiveCount
             }
         });
     } catch (error) {
@@ -378,7 +496,14 @@ app.get('/api/tests/:id/results', async (req: Request, res: Response) => {
 
         const resultsRes = await pool.query(
             `
-            SELECT date, impressions, clicks
+            SELECT
+                date,
+                impressions,
+                clicks,
+                views,
+                estimated_minutes_watched,
+                average_view_duration_seconds,
+                impressions_ctr
             FROM daily_results
             WHERE test_id = $1
             ORDER BY date ASC
@@ -388,17 +513,128 @@ app.get('/api/tests/:id/results', async (req: Request, res: Response) => {
 
         const test = testRes.rows[0];
         const dailyResults = resultsRes.rows;
-        const splitResults = splitDailyResultsByVariant(dailyResults, test.start_date);
+        const performance = computeVariantPerformance(dailyResults, test.start_date, scoringConfig.weights);
+        const computedDecision = evaluateWinnerDecision(
+            performance,
+            test.duration_days,
+            scoringConfig,
+            test.status === 'finished'
+        );
+
+        const winnerVariant = toVariantId(test.winner_variant) ?? computedDecision.winnerVariant;
+        const winnerMode = (test.winner_mode as string | null) ?? computedDecision.winnerMode;
+        const winnerConfidence = test.winner_confidence !== null && test.winner_confidence !== undefined
+            ? Number(test.winner_confidence)
+            : computedDecision.confidence;
 
         return res.json({
             test,
             dailyResults,
-            results_a: splitResults.a,
-            results_b: splitResults.b
+            results_a: {
+                impressions: performance.a.impressions,
+                clicks: performance.a.estimatedClicks,
+                ctr: performance.a.ctr
+            },
+            results_b: {
+                impressions: performance.b.impressions,
+                clicks: performance.b.estimatedClicks,
+                ctr: performance.b.ctr
+            },
+            variant_stats: {
+                a: performance.a,
+                b: performance.b
+            },
+            decision: {
+                winnerVariant,
+                winnerMode,
+                confidence: winnerConfidence,
+                pValue: computedDecision.pValue,
+                reviewRequired: Boolean(test.review_required ?? computedDecision.reviewRequired),
+                reason: test.decision_reason || computedDecision.reason,
+            }
         });
     } catch (error) {
         console.error('Error fetching results:', error);
         return res.status(500).json({ error: 'Failed to fetch results' });
+    }
+});
+
+app.post('/api/tests/:id/apply-winner', async (req: Request, res: Response) => {
+    const parsedParams = testIdParamSchema.safeParse(req.params);
+    if (!parsedParams.success) {
+        return res.status(400).json({ error: 'Invalid test id' });
+    }
+
+    const parsedBody = applyWinnerSchema.safeParse(req.body);
+    if (!parsedBody.success) {
+        return res.status(400).json({ error: 'Invalid request payload', details: formatZodError(parsedBody.error) });
+    }
+
+    try {
+        const user = getAuthenticatedUser(req);
+        const userId = user.id;
+        const testId = parsedParams.data.id;
+        const variant = parsedBody.data.variant;
+
+        const testRes = await pool.query('SELECT * FROM tests WHERE id = $1 AND user_id = $2', [testId, userId]);
+        if (testRes.rowCount === 0) {
+            return res.status(404).json({ error: 'Test not found or not owned by user' });
+        }
+
+        const test = testRes.rows[0];
+        const selectedAssets = buildManualVariantAssets(
+            variant,
+            test.title_a,
+            test.title_b,
+            test.thumbnail_url_a,
+            test.thumbnail_url_b
+        );
+
+        await updateVideoTitle(test.user_id, test.video_id, selectedAssets.title);
+        await updateVideoThumbnail(test.user_id, test.video_id, selectedAssets.thumbnail);
+
+        const resultsRes = await pool.query(
+            `
+            SELECT
+                date,
+                impressions,
+                clicks,
+                views,
+                estimated_minutes_watched,
+                average_view_duration_seconds,
+                impressions_ctr
+            FROM daily_results
+            WHERE test_id = $1
+            ORDER BY date ASC
+        `,
+            [testId]
+        );
+        const performance = computeVariantPerformance(resultsRes.rows, test.start_date, scoringConfig.weights);
+
+        const updateRes = await pool.query(
+            `
+            UPDATE tests
+            SET
+                status = 'finished',
+                current_variant = $1,
+                winner_variant = $1,
+                winner_mode = 'manual',
+                winner_confidence = NULL,
+                winner_score_a = $2,
+                winner_score_b = $3,
+                decision_reason = 'manual_override',
+                review_required = FALSE,
+                finished_at = NOW()
+            WHERE id = $4
+            RETURNING *
+        `,
+            [variant, performance.a.score, performance.b.score, testId]
+        );
+
+        return res.json({ success: true, test: updateRes.rows[0] });
+    } catch (error) {
+        console.error('Error applying manual winner:', error);
+        return res.status(500).json({ error: 'Failed to apply manual winner' });
     }
 });
 
@@ -483,22 +719,7 @@ app.post('/api/tests/:id/sync', async (req: Request, res: Response) => {
             }
 
             try {
-                const metrics = await getDailyAnalytics(test.user_id, test.video_id, dateStr);
-                if (metrics.rows && metrics.rows.length > 0) {
-                    const row = metrics.rows[0];
-                    const impressions = Number(row[2] || 0);
-                    const ctrPercent = Number(row[3] || 0);
-                    const estimatedClicks = computeEstimatedClicks(impressions, ctrPercent);
-
-                    await pool.query(
-                        `
-                        INSERT INTO daily_results (test_id, date, impressions, clicks)
-                        VALUES ($1, $2, $3, $4)
-                        ON CONFLICT DO NOTHING
-                    `,
-                        [testId, dateStr, impressions, estimatedClicks]
-                    );
-                }
+                await persistDailyAnalyticsForDate(testId, test.user_id, test.video_id, dateStr);
             } catch (syncError) {
                 console.error(`Failed to fetch analytics for ${dateStr}:`, getErrorMessage(syncError));
             }

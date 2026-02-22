@@ -6,6 +6,24 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { DashboardResponse, TestRecord } from '@/lib/api-types';
 
+function ThumbnailImage({ src, alt }: { src: string; alt: string }) {
+    const resolvedSrc = src || '/placeholder.jpg';
+    if (resolvedSrc.startsWith('data:')) {
+        // eslint-disable-next-line @next/next/no-img-element
+        return <img src={resolvedSrc} alt={alt} className="h-full w-full object-cover opacity-80 group-hover/thumb:opacity-100 transition-opacity" />;
+    }
+
+    return (
+        <Image
+            src={resolvedSrc}
+            alt={alt}
+            fill
+            sizes="(max-width: 1280px) 50vw, 25vw"
+            className="object-cover opacity-80 group-hover/thumb:opacity-100 transition-opacity"
+        />
+    );
+}
+
 export default function DashboardPage() {
     const [data, setData] = useState<DashboardResponse | null>(null);
     const [loading, setLoading] = useState(true);
@@ -30,7 +48,10 @@ export default function DashboardPage() {
         metrics: {
             activeCount: 0,
             avgCtrLift: 0,
-            extraClicks: 0
+            extraClicks: 0,
+            avgWtpiLift: 0,
+            extraWatchMinutes: 0,
+            inconclusiveCount: 0
         }
     };
 
@@ -53,7 +74,7 @@ export default function DashboardPage() {
                     </div>
                 ) : (
                     <>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">
                             <div className="p-5 rounded-xl bg-white dark:bg-surface-dark border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col gap-1">
                                 <div className="flex items-center justify-between">
                                     <span className="text-sm font-medium text-slate-500 dark:text-slate-400">Active Tests</span>
@@ -61,7 +82,6 @@ export default function DashboardPage() {
                                 </div>
                                 <div className="flex items-end gap-2 mt-2">
                                     <span className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">{safeData.metrics.activeCount}</span>
-                                    <span className="text-sm font-medium text-slate-500 mb-1">/ 10</span>
                                 </div>
                             </div>
 
@@ -80,11 +100,44 @@ export default function DashboardPage() {
 
                             <div className="p-5 rounded-xl bg-white dark:bg-surface-dark border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col gap-1">
                                 <div className="flex items-center justify-between">
+                                    <span className="text-sm font-medium text-slate-500 dark:text-slate-400">Watch-Time Lift</span>
+                                    <span className="material-symbols-outlined text-blue-500">timer</span>
+                                </div>
+                                <div className="flex items-end gap-2 mt-2">
+                                    <span className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
+                                        {safeData.metrics.avgWtpiLift >= 0 ? '+' : ''}
+                                        {safeData.metrics.avgWtpiLift}%
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div className="p-5 rounded-xl bg-white dark:bg-surface-dark border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col gap-1">
+                                <div className="flex items-center justify-between">
                                     <span className="text-sm font-medium text-slate-500 dark:text-slate-400">Extra Clicks</span>
                                     <span className="material-symbols-outlined text-primary">ads_click</span>
                                 </div>
                                 <div className="flex items-end gap-2 mt-2">
                                     <span className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">{safeData.metrics.extraClicks}</span>
+                                </div>
+                            </div>
+
+                            <div className="p-5 rounded-xl bg-white dark:bg-surface-dark border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col gap-1">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-sm font-medium text-slate-500 dark:text-slate-400">Extra Watch Minutes</span>
+                                    <span className="material-symbols-outlined text-indigo-500">schedule</span>
+                                </div>
+                                <div className="flex items-end gap-2 mt-2">
+                                    <span className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">{safeData.metrics.extraWatchMinutes}</span>
+                                </div>
+                            </div>
+
+                            <div className="p-5 rounded-xl bg-white dark:bg-surface-dark border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col gap-1">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-sm font-medium text-slate-500 dark:text-slate-400">Inconclusive Tests</span>
+                                    <span className="material-symbols-outlined text-amber-500">warning</span>
+                                </div>
+                                <div className="flex items-end gap-2 mt-2">
+                                    <span className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">{safeData.metrics.inconclusiveCount}</span>
                                 </div>
                             </div>
                         </div>
@@ -122,26 +175,14 @@ export default function DashboardPage() {
                                             <div className="grid grid-cols-2 divide-x divide-slate-100 dark:divide-slate-700/50">
                                                 <div className="p-5 flex flex-col gap-3">
                                                     <div className="relative aspect-video bg-slate-800 rounded-lg overflow-hidden border border-slate-700 group/thumb">
-                                                        <Image
-                                                            src={test.thumbnail_url_a || '/placeholder.jpg'}
-                                                            alt="Variant A"
-                                                            fill
-                                                            sizes="(max-width: 1280px) 50vw, 25vw"
-                                                            className="object-cover opacity-80 group-hover/thumb:opacity-100 transition-opacity"
-                                                        />
+                                                        <ThumbnailImage src={test.thumbnail_url_a} alt="Variant A" />
                                                         <span className="absolute top-2 left-2 px-2 py-0.5 bg-black/60 backdrop-blur-sm text-[10px] font-bold text-white rounded">Control (A)</span>
                                                     </div>
                                                 </div>
 
                                                 <div className="p-5 flex flex-col gap-3">
                                                     <div className="relative aspect-video bg-slate-800 rounded-lg overflow-hidden border border-slate-700 group/thumb">
-                                                        <Image
-                                                            src={test.thumbnail_url_b || '/placeholder.jpg'}
-                                                            alt="Variant B"
-                                                            fill
-                                                            sizes="(max-width: 1280px) 50vw, 25vw"
-                                                            className="object-cover opacity-80 group-hover/thumb:opacity-100 transition-opacity"
-                                                        />
+                                                        <ThumbnailImage src={test.thumbnail_url_b} alt="Variant B" />
                                                         <span className="absolute top-2 left-2 px-2 py-0.5 bg-black/60 backdrop-blur-sm text-[10px] font-bold text-white rounded">Variant (B)</span>
                                                     </div>
                                                 </div>

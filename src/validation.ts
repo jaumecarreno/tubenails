@@ -123,6 +123,10 @@ export const testIdParamSchema = z.object({
     id: z.string().uuid('Invalid test id')
 });
 
+export const applyWinnerSchema = z.object({
+    variant: z.enum(['A', 'B'], { message: 'variant must be A or B' })
+});
+
 export function formatZodError(error: z.ZodError): string {
     return error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; ');
 }

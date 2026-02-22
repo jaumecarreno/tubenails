@@ -1,13 +1,113 @@
 import cron from 'node-cron';
 import { pool } from './db';
 import { getDailyAnalytics, updateVideoThumbnail, updateVideoTitle } from './youtube';
-import { computeEstimatedClicks, splitDailyResultsByVariant } from './metrics';
+import {
+    computeEstimatedClicks,
+    computeVariantPerformance,
+    evaluateWinnerDecision,
+    ScoringConfig,
+    ScoreWeights,
+    VariantId
+} from './metrics';
 
 function getErrorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
 }
 
+function getEnvNumber(name: string, fallback: number): number {
+    const value = Number(process.env[name]);
+    return Number.isFinite(value) ? value : fallback;
+}
+
+function getEnvBoolean(name: string, fallback: boolean): boolean {
+    const value = process.env[name];
+    if (!value) {
+        return fallback;
+    }
+    return value.toLowerCase() === 'true';
+}
+
+function getScoringConfig(): ScoringConfig {
+    const ctrWeight = getEnvNumber('SCORING_CTR_WEIGHT', 0.70);
+    const qualityWeight = getEnvNumber('SCORING_QUALITY_WEIGHT', 0.30);
+    const weights: ScoreWeights = { ctrWeight, qualityWeight };
+
+    return {
+        minImpressionsPerVariant: getEnvNumber('MIN_IMPRESSIONS_PER_VARIANT', 1500),
+        minConfidence: getEnvNumber('MIN_CONFIDENCE', 0.95),
+        minCtrDeltaPctPoints: getEnvNumber('MIN_CTR_DELTA_PCT_POINTS', 0.20),
+        minScoreDelta: getEnvNumber('MIN_SCORE_DELTA', 0.02),
+        weights
+    };
+}
+
+function selectVariantAssets(
+    variant: VariantId,
+    titleA: string,
+    titleB: string,
+    thumbnailUrlA: string,
+    thumbnailUrlB: string
+): { title: string; thumbnail: string } {
+    return variant === 'A'
+        ? { title: titleA, thumbnail: thumbnailUrlA }
+        : { title: titleB, thumbnail: thumbnailUrlB };
+}
+
+async function persistDailyAnalyticsForDate(
+    testId: string,
+    userId: string,
+    videoId: string,
+    dateStr: string
+) {
+    const analyticsPoint = await getDailyAnalytics(userId, videoId, dateStr);
+    if (!analyticsPoint) {
+        return;
+    }
+
+    const estimatedClicks = computeEstimatedClicks(analyticsPoint.impressions, analyticsPoint.impressionsCtr);
+    await pool.query(
+        `
+        INSERT INTO daily_results (
+            test_id,
+            date,
+            impressions,
+            clicks,
+            impressions_ctr,
+            views,
+            estimated_minutes_watched,
+            average_view_duration_seconds,
+            metric_version
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        ON CONFLICT (test_id, date)
+        DO UPDATE SET
+            impressions = EXCLUDED.impressions,
+            clicks = EXCLUDED.clicks,
+            impressions_ctr = EXCLUDED.impressions_ctr,
+            views = EXCLUDED.views,
+            estimated_minutes_watched = EXCLUDED.estimated_minutes_watched,
+            average_view_duration_seconds = EXCLUDED.average_view_duration_seconds,
+            metric_version = EXCLUDED.metric_version
+    `,
+        [
+            testId,
+            dateStr,
+            analyticsPoint.impressions,
+            estimatedClicks,
+            analyticsPoint.impressionsCtr,
+            analyticsPoint.views,
+            analyticsPoint.estimatedMinutesWatched,
+            analyticsPoint.averageViewDurationSeconds,
+            analyticsPoint.metricVersion
+        ]
+    );
+}
+
 export function startCronJobs() {
+    const scoringConfig = getScoringConfig();
+    const scoringEngineV2Enabled = getEnvBoolean('SCORING_ENGINE_V2_ENABLED', false);
+    const revertToControlOnInconclusive = getEnvBoolean('INCONCLUSIVE_REVERT_TO_CONTROL', true);
+
     cron.schedule('1 0 * * *', async () => {
         console.log(`[${new Date().toISOString()}] Running daily variant alternation job...`);
         const client = await pool.connect();
@@ -34,23 +134,7 @@ export function startCronJobs() {
                     const dateStr = yesterday.toISOString().split('T')[0];
 
                     try {
-                        const metrics = await getDailyAnalytics(userId, videoId, dateStr);
-                        if (metrics.rows && metrics.rows.length > 0) {
-                            const row = metrics.rows[0];
-                            // With dimensions day,video => [day, video, impressions, impressionsCtr]
-                            const impressions = Number(row[2] || 0);
-                            const ctrPercent = Number(row[3] || 0);
-                            const estimatedClicks = computeEstimatedClicks(impressions, ctrPercent);
-
-                            await client.query(
-                                `
-                                INSERT INTO daily_results (test_id, date, impressions, clicks)
-                                VALUES ($1, $2, $3, $4)
-                                ON CONFLICT DO NOTHING
-                            `,
-                                [id, dateStr, impressions, estimatedClicks]
-                            );
-                        }
+                        await persistDailyAnalyticsForDate(id, userId, videoId, dateStr);
                     } catch (error) {
                         console.error(`Failed to fetch analytics for test ${id}: ${getErrorMessage(error)}`);
                     }
@@ -60,33 +144,148 @@ export function startCronJobs() {
                     const daysPassed = Math.floor(
                         Math.abs(todayDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
                     );
+                    const testCompleted = daysPassed >= test.duration_days;
 
-                    if (daysPassed >= test.duration_days) {
+                    if (testCompleted) {
                         const resultsRes = await client.query(
-                            'SELECT date, impressions, clicks FROM daily_results WHERE test_id = $1 ORDER BY date ASC',
+                            `
+                            SELECT
+                                date,
+                                impressions,
+                                clicks,
+                                views,
+                                estimated_minutes_watched,
+                                average_view_duration_seconds,
+                                impressions_ctr
+                            FROM daily_results
+                            WHERE test_id = $1
+                            ORDER BY date ASC
+                        `,
                             [id]
                         );
-                        const split = splitDailyResultsByVariant(resultsRes.rows, startDate);
-                        const ctrA = split.a.impressions > 0 ? split.a.clicks / split.a.impressions : 0;
-                        const ctrB = split.b.impressions > 0 ? split.b.clicks / split.b.impressions : 0;
 
-                        const winnerVariant = ctrB > ctrA ? 'B' : 'A';
-                        const finalTitle = winnerVariant === 'A' ? titleA : titleB;
-                        const finalThumb = winnerVariant === 'A' ? thumbnailUrlA : thumbnailUrlB;
+                        const performance = computeVariantPerformance(resultsRes.rows, startDate, scoringConfig.weights);
+                        const decision = evaluateWinnerDecision(performance, test.duration_days, scoringConfig, true);
 
-                        await updateVideoTitle(userId, videoId, finalTitle);
-                        await updateVideoThumbnail(userId, videoId, finalThumb);
-                        await client.query(
-                            "UPDATE tests SET status = 'finished', current_variant = $1 WHERE id = $2",
-                            [winnerVariant, id]
-                        );
+                        const oldWinnerVariant: VariantId = performance.b.ctr > performance.a.ctr ? 'B' : 'A';
+
+                        if (!scoringEngineV2Enabled) {
+                            const oldWinnerAssets = selectVariantAssets(
+                                oldWinnerVariant,
+                                titleA,
+                                titleB,
+                                thumbnailUrlA,
+                                thumbnailUrlB
+                            );
+
+                            await updateVideoTitle(userId, videoId, oldWinnerAssets.title);
+                            await updateVideoThumbnail(userId, videoId, oldWinnerAssets.thumbnail);
+
+                            await client.query(
+                                `
+                                UPDATE tests
+                                SET
+                                    status = 'finished',
+                                    current_variant = $1,
+                                    winner_variant = $1,
+                                    winner_mode = 'auto',
+                                    winner_confidence = $2,
+                                    winner_score_a = $3,
+                                    winner_score_b = $4,
+                                    decision_reason = $5,
+                                    review_required = FALSE,
+                                    finished_at = NOW()
+                                WHERE id = $6
+                            `,
+                                [
+                                    oldWinnerVariant,
+                                    decision.confidence,
+                                    performance.a.score,
+                                    performance.b.score,
+                                    `shadow_mode_old_ctr_applied|${decision.reason}`,
+                                    id
+                                ]
+                            );
+                            continue;
+                        }
+
+                        if (decision.winnerMode === 'auto' && decision.winnerVariant) {
+                            const winnerAssets = selectVariantAssets(
+                                decision.winnerVariant,
+                                titleA,
+                                titleB,
+                                thumbnailUrlA,
+                                thumbnailUrlB
+                            );
+
+                            await updateVideoTitle(userId, videoId, winnerAssets.title);
+                            await updateVideoThumbnail(userId, videoId, winnerAssets.thumbnail);
+
+                            await client.query(
+                                `
+                                UPDATE tests
+                                SET
+                                    status = 'finished',
+                                    current_variant = $1,
+                                    winner_variant = $1,
+                                    winner_mode = 'auto',
+                                    winner_confidence = $2,
+                                    winner_score_a = $3,
+                                    winner_score_b = $4,
+                                    decision_reason = $5,
+                                    review_required = FALSE,
+                                    finished_at = NOW()
+                                WHERE id = $6
+                            `,
+                                [
+                                    decision.winnerVariant,
+                                    decision.confidence,
+                                    performance.a.score,
+                                    performance.b.score,
+                                    decision.reason,
+                                    id
+                                ]
+                            );
+                        } else {
+                            let finalCurrentVariant = currentVariant as VariantId;
+                            if (revertToControlOnInconclusive) {
+                                await updateVideoTitle(userId, videoId, titleA);
+                                await updateVideoThumbnail(userId, videoId, thumbnailUrlA);
+                                finalCurrentVariant = 'A';
+                            }
+
+                            await client.query(
+                                `
+                                UPDATE tests
+                                SET
+                                    status = 'finished',
+                                    current_variant = $1,
+                                    winner_variant = NULL,
+                                    winner_mode = 'inconclusive',
+                                    winner_confidence = $2,
+                                    winner_score_a = $3,
+                                    winner_score_b = $4,
+                                    decision_reason = $5,
+                                    review_required = TRUE,
+                                    finished_at = NOW()
+                                WHERE id = $6
+                            `,
+                                [
+                                    finalCurrentVariant,
+                                    decision.confidence,
+                                    performance.a.score,
+                                    performance.b.score,
+                                    decision.reason,
+                                    id
+                                ]
+                            );
+                        }
                     } else {
-                        const nextVariant = currentVariant === 'A' ? 'B' : 'A';
-                        const nextTitle = nextVariant === 'A' ? titleA : titleB;
-                        const nextThumb = nextVariant === 'A' ? thumbnailUrlA : thumbnailUrlB;
+                        const nextVariant: VariantId = currentVariant === 'A' ? 'B' : 'A';
+                        const nextAssets = selectVariantAssets(nextVariant, titleA, titleB, thumbnailUrlA, thumbnailUrlB);
 
-                        await updateVideoTitle(userId, videoId, nextTitle);
-                        await updateVideoThumbnail(userId, videoId, nextThumb);
+                        await updateVideoTitle(userId, videoId, nextAssets.title);
+                        await updateVideoThumbnail(userId, videoId, nextAssets.thumbnail);
                         await client.query('UPDATE tests SET current_variant = $1 WHERE id = $2', [nextVariant, id]);
                     }
 

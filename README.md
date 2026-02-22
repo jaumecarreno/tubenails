@@ -29,6 +29,14 @@ Copy `.env.example` to `.env` and configure:
 - `SUPABASE_ANON_KEY`
 - `FRONTEND_URL`
 - `JSON_BODY_LIMIT` (recommended: `6mb` for thumbnail uploads)
+- `SCORING_ENGINE_V2_ENABLED` (`false` for shadow mode, `true` to enable auto-decision V2)
+- `SCORING_CTR_WEIGHT` (default `0.70`)
+- `SCORING_QUALITY_WEIGHT` (default `0.30`)
+- `MIN_IMPRESSIONS_PER_VARIANT` (default `1500`)
+- `MIN_CONFIDENCE` (default `0.95`)
+- `MIN_CTR_DELTA_PCT_POINTS` (default `0.20`)
+- `MIN_SCORE_DELTA` (default `0.02`)
+- `INCONCLUSIVE_REVERT_TO_CONTROL` (default `true`)
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 
@@ -77,6 +85,8 @@ Frontend (`frontend/package.json`):
 - YouTube OAuth now uses signed/expiring `state` + one-time nonce in DB.
 - Test status is unified as `active | finished`.
 - Dashboard metrics are computed from real `daily_results` rows.
+- `GET /api/tests/:id/results` returns `variant_stats` and `decision` blocks (V2 scoring).
+- `POST /api/tests/:id/apply-winner` supports manual closure for inconclusive tests.
 
 ## CI
 
