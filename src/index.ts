@@ -129,6 +129,38 @@ app.get('/api/dashboard', async (req: Request, res: Response) => {
     }
 });
 
+// User Settings API (GET)
+app.get('/api/user/settings', async (req: Request, res: Response) => {
+    try {
+        const user = (req as any).user;
+        const userId = user.id;
+
+        const userRes = await pool.query(
+            'SELECT id, email, stripe_plan, yt_access_token, yt_refresh_token, created_at FROM users WHERE id = $1',
+            [userId]
+        );
+
+        if (userRes.rowCount === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        const dbUser = userRes.rows[0];
+
+        res.json({
+            user: {
+                id: dbUser.id,
+                email: dbUser.email,
+                plan: dbUser.stripe_plan || 'free',
+                youtubeConnected: !!dbUser.yt_access_token,
+                createdAt: dbUser.created_at
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching user settings:', error);
+        res.status(500).json({ error: 'Failed to fetch user settings' });
+    }
+});
+
 // Tests API (Create)
 app.post('/api/tests', async (req: Request, res: Response) => {
     try {
