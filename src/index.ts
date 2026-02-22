@@ -164,9 +164,9 @@ app.get('/api/user/settings', async (req: Request, res: Response) => {
                 id: dbUser.id,
                 email: dbUser.email,
                 plan: dbUser.stripe_plan || 'free',
-                youtubeConnected: !!dbUser.yt_access_token,
                 createdAt: dbUser.created_at
-            }
+            },
+            isYoutubeConnected: !!dbUser.yt_access_token
         });
     } catch (error) {
         console.error('Error fetching user settings:', error);
