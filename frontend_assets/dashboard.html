@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>CTR Sniper Dashboard</title>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<!-- Material Icons -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Theme Configuration -->
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#ff0000",
+                        "background-light": "#f8f5f5",
+                        "background-dark": "#111827", /* gray-900 */
+                        "surface-dark": "#1f2937", /* gray-800 */
+                        "surface-dark-hover": "#374151", /* gray-700 */
+                        "success": "#10b981", /* emerald-500 */
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"],
+                        "sans": ["Inter", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.375rem", 
+                        "lg": "0.5rem", 
+                        "xl": "0.75rem", 
+                        "2xl": "1rem",
+                        "full": "9999px"
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Custom scrollbar for webkit */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1f2937; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #4b5563; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #6b7280; 
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 min-h-screen flex antialiased selection:bg-primary selection:text-white">
+<!-- Sidebar -->
+<aside class="fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-surface-dark border-r border-slate-200 dark:border-slate-700 flex flex-col transition-transform duration-300 transform -translate-x-full lg:translate-x-0 lg:static lg:inset-auto">
+<!-- Logo Area -->
+<div class="h-16 flex items-center gap-3 px-6 border-b border-slate-200 dark:border-slate-700">
+<div class="relative flex items-center justify-center w-8 h-8 rounded bg-primary/10 text-primary">
+<span class="material-symbols-outlined text-xl">ads_click</span>
+<div class="absolute -top-1 -right-1 w-2.5 h-2.5 bg-primary rounded-full border-2 border-white dark:border-surface-dark"></div>
+</div>
+<div class="flex flex-col">
+<h1 class="font-bold text-lg tracking-tight leading-none">CTR Sniper</h1>
+<span class="text-[10px] uppercase font-semibold text-slate-500 tracking-wider">Beta</span>
+</div>
+</div>
+<!-- Navigation -->
+<nav class="flex-1 overflow-y-auto py-6 px-3 space-y-1">
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-primary/10 text-primary font-medium transition-colors" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">dashboard</span>
+                Dashboard
+            </a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-surface-dark-hover hover:text-slate-900 dark:hover:text-white font-medium transition-colors group" href="#">
+<span class="material-symbols-outlined group-hover:text-slate-900 dark:group-hover:text-white transition-colors">add_circle</span>
+                New Test
+            </a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-surface-dark-hover hover:text-slate-900 dark:hover:text-white font-medium transition-colors group" href="#">
+<span class="material-symbols-outlined group-hover:text-slate-900 dark:group-hover:text-white transition-colors">history</span>
+                History
+            </a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-surface-dark-hover hover:text-slate-900 dark:hover:text-white font-medium transition-colors group" href="#">
+<span class="material-symbols-outlined group-hover:text-slate-900 dark:group-hover:text-white transition-colors">settings</span>
+                Settings
+            </a>
+</nav>
+<!-- Sidebar Footer -->
+<div class="p-4 border-t border-slate-200 dark:border-slate-700 space-y-4">
+<!-- Upgrade CTA -->
+<div class="bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
+<div class="flex items-center justify-between mb-2">
+<span class="text-xs font-semibold text-slate-500 uppercase">Free Plan</span>
+<span class="text-xs font-bold text-primary">1/3 Tests</span>
+</div>
+<div class="w-full bg-slate-300 dark:bg-slate-700 rounded-full h-1.5 mb-4">
+<div class="bg-primary h-1.5 rounded-full" style="width: 33%"></div>
+</div>
+<button class="w-full flex items-center justify-center gap-2 py-2 px-4 bg-primary hover:bg-red-600 text-white text-sm font-semibold rounded-lg transition-colors shadow-lg shadow-primary/20">
+<span class="material-symbols-outlined text-[18px]">bolt</span>
+                    Upgrade to Pro
+                </button>
+</div>
+<!-- User Profile -->
+<div class="flex items-center gap-3 px-2">
+<div class="w-9 h-9 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden ring-2 ring-transparent hover:ring-slate-300 dark:hover:ring-slate-600 transition-all cursor-pointer bg-cover bg-center" data-alt="User profile picture showing a young man" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCM9sI4SxXbwg2QVTlOGm_Mbom_syCIpLzdckzuujLk-gMtxT17IhHRn90b-B10GzgSVcCR9hvRcs3rIR7byoJ6_TwnfBl_IU9AZfYevdvP8ggaVh1g7Z2Y8SC8GI01Z5b6d5fDgzn8Y1ShQtHgG2YESSpx_ecXMZgS-8rTBm7I_DwGwLpb_lDJRWjJIFxk5pO7wpgHhOuWous_RHGpNULTIEXGn9fDxSWUhBofdM37ThbKuQTTUUq6xUYkXpN-Icbcj65SwcjlNAlx')"></div>
+<div class="flex-1 min-w-0">
+<p class="text-sm font-medium text-slate-900 dark:text-white truncate">Alex Creator</p>
+<p class="text-xs text-slate-500 dark:text-slate-400 truncate">alex@youtube.com</p>
+</div>
+<button class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+<span class="material-symbols-outlined text-[20px]">more_vert</span>
+</button>
+</div>
+</div>
+</aside>
+<!-- Main Content -->
+<main class="flex-1 flex flex-col h-screen overflow-hidden relative">
+<!-- Header -->
+<header class="h-16 flex items-center justify-between px-6 lg:px-10 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-background-dark/50 backdrop-blur-md sticky top-0 z-40">
+<h2 class="text-xl font-bold text-slate-900 dark:text-white">Dashboard</h2>
+<div class="flex items-center gap-4">
+<button class="relative p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-white transition-colors rounded-full hover:bg-slate-100 dark:hover:bg-slate-800">
+<span class="material-symbols-outlined">notifications</span>
+<span class="absolute top-2 right-2 w-2 h-2 bg-primary rounded-full border border-white dark:border-background-dark"></span>
+</button>
+<button class="hidden sm:flex items-center gap-2 py-2 px-4 bg-primary hover:bg-red-600 text-white text-sm font-semibold rounded-lg transition-colors shadow-lg shadow-primary/25">
+<span class="material-symbols-outlined text-[20px]">add</span>
+                    Crear Nuevo Test
+                </button>
+</div>
+</header>
+<!-- Scrollable Content Area -->
+<div class="flex-1 overflow-y-auto p-6 lg:p-10 space-y-8">
+<!-- Metrics Row -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6">
+<!-- Card 1 -->
+<div class="p-5 rounded-xl bg-white dark:bg-surface-dark border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col gap-1">
+<div class="flex items-center justify-between">
+<span class="text-sm font-medium text-slate-500 dark:text-slate-400">Tests Activos</span>
+<span class="material-symbols-outlined text-slate-400 dark:text-slate-500">science</span>
+</div>
+<div class="flex items-end gap-2 mt-2">
+<span class="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">3</span>
+<span class="text-sm font-medium text-slate-500 mb-1">/ 10</span>
+</div>
+</div>
+<!-- Card 2 -->
+<div class="p-5 rounded-xl bg-white dark:bg-surface-dark border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col gap-1">
+<div class="flex items-center justify-between">
+<span class="text-sm font-medium text-slate-500 dark:text-slate-400">Mejora Promedio CTR</span>
+<span class="material-symbols-outlined text-success">trending_up</span>
+</div>
+<div class="flex items-end gap-2 mt-2">
+<span class="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">+1.2%</span>
+<span class="text-sm font-medium text-success mb-1 flex items-center bg-success/10 px-1.5 py-0.5 rounded">
+<span class="material-symbols-outlined text-[14px] mr-0.5">arrow_upward</span>
+                            High
+                        </span>
+</div>
+</div>
+<!-- Card 3 -->
+<div class="p-5 rounded-xl bg-white dark:bg-surface-dark border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col gap-1">
+<div class="flex items-center justify-between">
+<span class="text-sm font-medium text-slate-500 dark:text-slate-400">Clics Extra</span>
+<span class="material-symbols-outlined text-primary">ads_click</span>
+</div>
+<div class="flex items-end gap-2 mt-2">
+<span class="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">14,500</span>
+<span class="text-sm font-medium text-slate-500 mb-1">Total acumulado</span>
+</div>
+</div>
+</div>
+<!-- Active Tests Section -->
+<section class="space-y-4">
+<div class="flex items-center justify-between">
+<h3 class="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+<span class="relative flex h-3 w-3">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75"></span>
+<span class="relative inline-flex rounded-full h-3 w-3 bg-success"></span>
+</span>
+                        Tus Tests Activos
+                    </h3>
+<button class="text-sm font-medium text-primary hover:text-red-400 transition-colors">Ver todos</button>
+</div>
+<div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+<!-- Test Card 1 -->
+<article class="flex flex-col rounded-xl bg-white dark:bg-surface-dark border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm hover:border-slate-300 dark:hover:border-slate-600 transition-colors group">
+<!-- Card Header -->
+<div class="px-5 py-4 border-b border-slate-100 dark:border-slate-700/50 flex justify-between items-start gap-4">
+<div>
+<h4 class="font-bold text-base text-slate-900 dark:text-white line-clamp-1 group-hover:text-primary transition-colors">Cómo ganar 10k seguidores en 2024</h4>
+<p class="text-xs text-slate-500 mt-1 flex items-center gap-1.5">
+<span class="text-success font-medium">En progreso</span>
+<span>•</span>
+<span>Iniciado hace 2 días</span>
+</p>
+</div>
+<div class="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-500 cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors">
+<span class="material-symbols-outlined text-[20px]">more_horiz</span>
+</div>
+</div>
+<!-- Comparison Grid -->
+<div class="grid grid-cols-2 divide-x divide-slate-100 dark:divide-slate-700/50">
+<!-- Variant A -->
+<div class="p-5 flex flex-col gap-3">
+<div class="relative aspect-video bg-slate-800 rounded-lg overflow-hidden border border-slate-700 group/thumb">
+<img alt="Video thumbnail variant A showing abstract social media graphs" class="object-cover w-full h-full opacity-80 group-hover/thumb:opacity-100 transition-opacity" data-alt="Video thumbnail variant A showing abstract social media graphs" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDMoZfPdHcKDya7VX8WSfl9WnqnkZ8X3vKEwDxJWPE-nX9b1cwoAIHVeYgJPXv-FpJxjko2iRUQYVt_kxfHfyUYrFv1_sIOVXYzXZlyWsQafR-iqu56vw2lbczF2mUIva4PGWUrQiBvuZfHx21ziHyBmH9gZiGBouet5lLf0oFuEpDQAzhzwi3NvjLFZOiwQYYH9A2tSK3uH4IeWlKDJzzJXBeKbPpefZJGJzTNWMOmHmeT1QQ2MuCbH_xkNLTw3S3Rj0DOcashIc_0"/>
+<span class="absolute top-2 left-2 px-2 py-0.5 bg-black/60 backdrop-blur-sm text-[10px] font-bold text-white rounded">Original</span>
+</div>
+<div class="flex flex-col">
+<p class="text-sm font-medium text-slate-500 mb-1">CTR Actual</p>
+<p class="text-xl font-bold text-slate-900 dark:text-slate-300">4.2%</p>
+</div>
+</div>
+<!-- Variant B (Winning) -->
+<div class="p-5 flex flex-col gap-3 bg-success/5 dark:bg-success/5 relative">
+<div class="relative aspect-video bg-slate-800 rounded-lg overflow-hidden border border-success/30 ring-2 ring-success/20 group/thumb">
+<img alt="Video thumbnail variant B showing person pointing at chart" class="object-cover w-full h-full opacity-90 group-hover/thumb:opacity-100 transition-opacity" data-alt="Video thumbnail variant B showing person pointing at chart" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBbiMysqDTvV2x2XwQA2EM1uX6-21cPckcb7hZ4AsaGyDjlFZ_Q5CcQTTLaZHZq__X6Fr5grh4r4kYA2khDxtyK_x9gBcMyEHMXXO-OTd0NPpNt0G8aTwa77pGRT7Ay9UWF7XuNTO2AgaOhQzezQcTuAWCsDtscDKkOquFhjwIJzO2xQYoKAkDb_JepOmcaRVh8jj8pH7FuOZ85dhS20ImcmWH1JwVATUH8rB9lj5fFeI3riJR5kScE_fclQPHodEcuS4MkpxXppV7N"/>
+<span class="absolute top-2 left-2 px-2 py-0.5 bg-success text-[10px] font-bold text-white rounded shadow-sm">Variante B</span>
+<span class="absolute bottom-2 right-2 px-1.5 py-0.5 bg-black/70 backdrop-blur-sm text-[10px] font-medium text-success rounded flex items-center gap-1">
+<span class="material-symbols-outlined text-[12px]">trending_up</span> Leading
+                                    </span>
+</div>
+<div class="flex flex-col">
+<p class="text-sm font-medium text-success/80 mb-1">CTR Actual</p>
+<p class="text-xl font-bold text-success">5.8%</p>
+</div>
+</div>
+</div>
+<!-- Card Footer -->
+<div class="px-5 py-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-700/50 flex flex-col sm:flex-row items-center justify-between gap-4">
+<div class="flex-1 w-full sm:w-auto flex flex-col gap-1.5">
+<div class="flex justify-between text-xs font-medium text-slate-500">
+<span>Próximo cambio</span>
+<span>4h 23m</span>
+</div>
+<div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden">
+<div class="bg-gradient-to-r from-blue-500 to-indigo-500 h-1.5 rounded-full animate-pulse" style="width: 65%"></div>
+</div>
+</div>
+<button class="w-full sm:w-auto px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+                                Detener Test
+                            </button>
+</div>
+</article>
+<!-- Test Card 2 -->
+<article class="flex flex-col rounded-xl bg-white dark:bg-surface-dark border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm hover:border-slate-300 dark:hover:border-slate-600 transition-colors group">
+<!-- Card Header -->
+<div class="px-5 py-4 border-b border-slate-100 dark:border-slate-700/50 flex justify-between items-start gap-4">
+<div>
+<h4 class="font-bold text-base text-slate-900 dark:text-white line-clamp-1 group-hover:text-primary transition-colors">Review iPhone 15 Pro Max - ¿Vale la pena?</h4>
+<p class="text-xs text-slate-500 mt-1 flex items-center gap-1.5">
+<span class="text-success font-medium">En progreso</span>
+<span>•</span>
+<span>Iniciado hace 5 horas</span>
+</p>
+</div>
+<div class="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-500 cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors">
+<span class="material-symbols-outlined text-[20px]">more_horiz</span>
+</div>
+</div>
+<!-- Comparison Grid -->
+<div class="grid grid-cols-2 divide-x divide-slate-100 dark:divide-slate-700/50">
+<!-- Variant A -->
+<div class="p-5 flex flex-col gap-3">
+<div class="relative aspect-video bg-slate-800 rounded-lg overflow-hidden border border-slate-700 group/thumb">
+<img alt="Video thumbnail variant A showing a smartphone close up" class="object-cover w-full h-full opacity-80 group-hover/thumb:opacity-100 transition-opacity" data-alt="Video thumbnail variant A showing a smartphone close up" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBxh-NP3RYYk3DxhdbRXYWBb7_9JrcnXsbhudVu1pgD8zM1T1vXuYqhsTk5SWW0FB4WeRJzJ2i7jHMiBdRnsPIImHbGBXL_Ra6Nqx2ExoGLnITdnVFFArkhdVnz7_OzTys49ZqhNloGKA1tuy-VKbMmwZupr4Nt6hAqzMYuDf1PT8bAHf96JP71xbsmAuoywsdsxioay7Xr1bsWi8BmHm2OnmqjLWpZrsTfXmQmrFhzMSIBHXw22bCO08NiC1SIpdifJ167yQlFyNC2"/>
+<span class="absolute top-2 left-2 px-2 py-0.5 bg-black/60 backdrop-blur-sm text-[10px] font-bold text-white rounded">Original</span>
+</div>
+<div class="flex flex-col">
+<p class="text-sm font-medium text-slate-500 mb-1">CTR Actual</p>
+<p class="text-xl font-bold text-slate-900 dark:text-slate-300">8.1%</p>
+</div>
+</div>
+<!-- Variant B -->
+<div class="p-5 flex flex-col gap-3">
+<div class="relative aspect-video bg-slate-800 rounded-lg overflow-hidden border border-slate-700 group/thumb">
+<img alt="Video thumbnail variant B showing a person holding a smartphone" class="object-cover w-full h-full opacity-80 group-hover/thumb:opacity-100 transition-opacity" data-alt="Video thumbnail variant B showing a person holding a smartphone" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDuNkuVeZ92Txji57Zmc7fQnFU3cBCDA9YyeDdHj_v7r6L-wlHx4rmZLIvLVohKYbtkNv1LvwTY4p2Fjl0n5_LQRSsGW8JfOl1vtBY_CfxThpwacTV5TyEa7xldXDdCbkerYFCIDDV5TzYIPR9j9uR7DryMEUxO9-hdHO6O4sxS_2A5wv5qYQCAb9nd7-sqIRmKO5ZtOEEKzqOughVxsYsKMzsqsBpzGIQIFWDtmVfrkbzH9L2T60GovMjcRKKS2ti5GQZYZ-s9LjnQ"/>
+<span class="absolute top-2 left-2 px-2 py-0.5 bg-slate-600 text-[10px] font-bold text-white rounded shadow-sm">Variante B</span>
+</div>
+<div class="flex flex-col">
+<p class="text-sm font-medium text-slate-500 mb-1">CTR Actual</p>
+<p class="text-xl font-bold text-slate-900 dark:text-slate-300">7.9%</p>
+</div>
+</div>
+</div>
+<!-- Card Footer -->
+<div class="px-5 py-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-700/50 flex flex-col sm:flex-row items-center justify-between gap-4">
+<div class="flex-1 w-full sm:w-auto flex flex-col gap-1.5">
+<div class="flex justify-between text-xs font-medium text-slate-500">
+<span>Próximo cambio</span>
+<span>19h 10m</span>
+</div>
+<div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden">
+<div class="bg-gradient-to-r from-blue-500 to-indigo-500 h-1.5 rounded-full" style="width: 20%"></div>
+</div>
+</div>
+<button class="w-full sm:w-auto px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+                                Detener Test
+                            </button>
+</div>
+</article>
+</div>
+</section>
+<!-- Finished Tests / Insights Section -->
+<section class="space-y-4 pb-10">
+<h3 class="text-lg font-bold text-slate-900 dark:text-white">Tests Finalizados Recientes</h3>
+<div class="rounded-xl border border-blue-200 dark:border-blue-900/50 bg-blue-50 dark:bg-blue-900/20 p-4 flex items-start gap-4 shadow-sm">
+<div class="p-2 bg-blue-100 dark:bg-blue-800 rounded-full shrink-0 text-blue-600 dark:text-blue-300">
+<span class="material-symbols-outlined text-[20px]">lightbulb</span>
+</div>
+<div class="flex flex-col gap-1">
+<p class="text-sm font-bold text-blue-900 dark:text-blue-100">Test completado: "Tutorial React 2024"</p>
+<p class="text-sm text-blue-800 dark:text-blue-300 leading-relaxed">
+                            La <span class="font-bold">Variante B</span> ganó con un <span class="font-bold text-green-600 dark:text-green-400">18% más de clics</span>. Ya ha sido aplicada permanentemente a tu video de forma automática.
+                        </p>
+</div>
+<button class="ml-auto text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-800 p-1 rounded-md transition-colors">
+<span class="material-symbols-outlined text-[20px]">close</span>
+</button>
+</div>
+<!-- Example of a finished item row -->
+<div class="rounded-xl bg-white dark:bg-surface-dark border border-slate-200 dark:border-slate-700 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 opacity-75 hover:opacity-100 transition-opacity">
+<div class="flex items-center gap-4">
+<div class="w-16 h-10 bg-slate-200 dark:bg-slate-700 rounded overflow-hidden">
+<img alt="Thumbnail of finished test" class="w-full h-full object-cover" data-alt="Thumbnail of finished test showing React logo" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAuYFqgdMqrY5j5QM8FU_xCtLSzc1V8osKbEWJ3G8LGu1i85Qrhm6uoTMkeZIzqGV9FpYFE6i9xYM74bCtxNhZo35qmiMxzmH9ThQMNarJJZ5hVeN5s6Yu9tdDgKQpKUCsfeAcP3j86BMkOKXk6G8STwaI7gstjrbMjIFWrpGowKWgxhByTQULHmw39f-JI3YWB_mF4914E1RDayiq56EQCacVV9jIi44xwxtUWUPWEigsYK9YjMqe5_NxLcoTj7YCz94Qg87aZMO_g"/>
+</div>
+<div class="flex flex-col">
+<p class="text-sm font-bold text-slate-900 dark:text-white">Tutorial React 2024</p>
+<p class="text-xs text-slate-500">Finalizado el 12 Oct</p>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<div class="text-right">
+<p class="text-xs text-slate-500">Mejora</p>
+<p class="text-sm font-bold text-success">+18%</p>
+</div>
+<button class="px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded border border-slate-200 dark:border-slate-600 transition-colors">
+                            Ver Reporte
+                        </button>
+</div>
+</div>
+</section>
+</div>
+</main>
+</body></html>

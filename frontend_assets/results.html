@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>CTR Sniper - Results</title>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS with Plugins -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Theme Config -->
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#f20d0d",
+                        "background-light": "#f8f5f5",
+                        "background-dark": "#0f0505", /* Darkened further for better contrast */
+                        "surface-dark": "#1a0b0b", /* Slightly lighter than bg for cards */
+                        "surface-border": "#3a1a1a",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "2xl": "1rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100 antialiased min-h-screen flex flex-col">
+<!-- Navbar -->
+<nav class="border-b border-surface-border bg-surface-dark/50 backdrop-blur-md sticky top-0 z-50">
+<div class="max-w-[1200px] mx-auto px-6 h-16 flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="size-8 bg-gradient-to-br from-primary to-orange-600 rounded-lg flex items-center justify-center text-white shadow-lg shadow-primary/20">
+<span class="material-symbols-outlined text-xl">target</span>
+</div>
+<h1 class="text-white text-lg font-bold tracking-tight">CTR Sniper</h1>
+</div>
+<div class="flex items-center gap-4">
+<button class="flex items-center justify-center size-8 rounded-full hover:bg-white/5 transition-colors text-slate-400">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<div class="w-8 h-8 rounded-full bg-surface-border overflow-hidden border border-surface-border" data-alt="User avatar profile picture">
+<img alt="Profile" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCvf9hNYK70DUJXjyFeBB7s-dW1Ppc-amP3deBv0di8UycTy9TztY_AMdapCpc1W5Wg26EGoDvnJ8tnYvBBogL2Gf-kypcgW6gvzNbMAzx5Lbt_DC2EAYtueyUrZCWcv7KcPRUYGc8AmoNsX8sTHgzyiNwo1XoYXsml9UYo_9MlWX4u2wYjqsfUZCx5ipXQ8pwbrX_KEUrtfU4lZqz5Lztk4gqt7sqdKfgnRP6_VxFYFg-LOb76dscQDczipplaaENP49r09Dbza3QO"/>
+</div>
+</div>
+</div>
+</nav>
+<!-- Main Content -->
+<main class="flex-1 w-full max-w-[1200px] mx-auto px-6 py-8 pb-20">
+<!-- Header Actions -->
+<header class="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
+<div class="flex flex-col gap-2">
+<button class="group flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-sm font-medium w-fit">
+<span class="material-symbols-outlined text-lg group-hover:-translate-x-1 transition-transform">arrow_back</span>
+                    Volver al Dashboard
+                </button>
+<div class="flex items-center gap-4 mt-1">
+<h2 class="text-2xl font-bold text-white tracking-tight">Cómo ganar tus primeros 1000 suscriptores</h2>
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-green-500/10 text-green-500 border border-green-500/20">
+<span class="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+                        Estado: Finalizado
+                    </span>
+</div>
+</div>
+</header>
+<!-- Layout Grid -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+<!-- Left Column: Hero Verdict (Spans 2 columns on large screens) -->
+<div class="lg:col-span-2 space-y-6">
+<!-- Verdict Card -->
+<div class="bg-surface-dark border border-surface-border rounded-xl p-6 relative overflow-hidden group">
+<!-- Glow effect -->
+<div class="absolute -top-24 -right-24 w-64 h-64 bg-primary/10 blur-[80px] rounded-full pointer-events-none"></div>
+<div class="flex items-center gap-3 mb-6">
+<span class="material-symbols-outlined text-3xl text-yellow-500">emoji_events</span>
+<div>
+<h3 class="text-xl font-bold text-white">La Variante B es la ganadora indiscutible</h3>
+<p class="text-slate-400 text-sm">Esta variante generó un <span class="text-green-500 font-bold">37% más de clics</span> que la versión original.</p>
+</div>
+</div>
+<div class="flex flex-col md:flex-row gap-6">
+<!-- Winner Thumbnail -->
+<div class="relative w-full md:w-1/2 aspect-video rounded-lg overflow-hidden border border-surface-border shadow-2xl">
+<div class="absolute top-3 left-3 z-10 bg-black/80 backdrop-blur-sm text-green-400 text-xs font-bold px-2 py-1 rounded border border-green-500/30 flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">trending_up</span>
+                                WINNER
+                            </div>
+<div class="w-full h-full bg-slate-800 bg-cover bg-center" data-alt="Close up of a person holding a smartphone showing social media statistics" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuBrAC1iE7JDY26KEpombClP2wIQui_RUD8MiAQk1PpnkW87Kf7wF0WOVJsQN3zk-zQMPjIbVPEBLtbQegd1VZrgfpTME2nOJdIAdUVqGEXMDf5-8GFsdD50gQ0jKc8rOjcKHaMoZFu6qv571g6sdd47NiP8W4-D2HxocXb4zvCDKhvpv05rfnxxIYIvFnyUCaKCpFoIVfKmPUM_r6U1DwIJPuNQxy12WiXw72UPFrxNcYm7BgSWdkUwgknbxhBBn3jAulb54dj-7I4l');"></div>
+</div>
+<!-- Action & Key Stats -->
+<div class="flex flex-col justify-center flex-1 gap-4">
+<div class="grid grid-cols-2 gap-4">
+<div class="bg-background-dark/50 p-3 rounded-lg border border-surface-border">
+<p class="text-slate-500 text-xs font-medium uppercase tracking-wider mb-1">CTR Final</p>
+<p class="text-2xl font-bold text-white">5.5%</p>
+</div>
+<div class="bg-background-dark/50 p-3 rounded-lg border border-surface-border">
+<p class="text-slate-500 text-xs font-medium uppercase tracking-wider mb-1">Confianza</p>
+<p class="text-2xl font-bold text-green-500">99%</p>
+</div>
+</div>
+<div class="h-px bg-surface-border w-full my-2"></div>
+<button class="w-full bg-primary hover:bg-red-600 text-white font-bold py-3 px-4 rounded-lg shadow-lg shadow-primary/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2 group/btn">
+<span class="material-symbols-outlined text-[20px]">youtube_activity</span>
+                                Aplicar Ganadora Permanentemente
+                                <span class="material-symbols-outlined text-lg opacity-70 group-hover/btn:translate-x-1 transition-transform">arrow_forward</span>
+</button>
+<p class="text-center text-xs text-slate-500">Esta acción actualizará tu video en YouTube automáticamente.</p>
+</div>
+</div>
+</div>
+<!-- Chart Section -->
+<div class="bg-surface-dark border border-surface-border rounded-xl p-6">
+<div class="flex items-center justify-between mb-6">
+<h3 class="text-lg font-bold text-white">Evolución del CTR por Día</h3>
+<div class="flex items-center gap-4 text-xs font-medium">
+<div class="flex items-center gap-2">
+<span class="w-3 h-3 rounded-sm bg-slate-600"></span>
+<span class="text-slate-400">Variante A</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="w-3 h-3 rounded-sm bg-primary"></span>
+<span class="text-slate-400">Variante B</span>
+</div>
+</div>
+</div>
+<!-- Chart Placeholder -->
+<div class="w-full h-64 flex items-end justify-between gap-2 px-2">
+<!-- Simulated Chart Data -->
+<div class="flex flex-col items-center gap-2 w-full group">
+<div class="w-full bg-slate-600/20 h-full rounded-t-sm relative overflow-hidden group-hover:bg-slate-600/30 transition-colors">
+<div class="absolute bottom-0 w-full bg-slate-600 h-[40%]"></div>
+</div>
+<span class="text-[10px] text-slate-500">Day 1 (A)</span>
+</div>
+<div class="flex flex-col items-center gap-2 w-full group">
+<div class="w-full bg-primary/10 h-full rounded-t-sm relative overflow-hidden group-hover:bg-primary/20 transition-colors">
+<div class="absolute bottom-0 w-full bg-primary h-[55%]"></div>
+</div>
+<span class="text-[10px] text-slate-500 font-bold text-primary">Day 2 (B)</span>
+</div>
+<div class="flex flex-col items-center gap-2 w-full group">
+<div class="w-full bg-slate-600/20 h-full rounded-t-sm relative overflow-hidden group-hover:bg-slate-600/30 transition-colors">
+<div class="absolute bottom-0 w-full bg-slate-600 h-[38%]"></div>
+</div>
+<span class="text-[10px] text-slate-500">Day 3 (A)</span>
+</div>
+<div class="flex flex-col items-center gap-2 w-full group">
+<div class="w-full bg-primary/10 h-full rounded-t-sm relative overflow-hidden group-hover:bg-primary/20 transition-colors">
+<div class="absolute bottom-0 w-full bg-primary h-[62%]"></div>
+</div>
+<span class="text-[10px] text-slate-500 font-bold text-primary">Day 4 (B)</span>
+</div>
+<div class="flex flex-col items-center gap-2 w-full group">
+<div class="w-full bg-slate-600/20 h-full rounded-t-sm relative overflow-hidden group-hover:bg-slate-600/30 transition-colors">
+<div class="absolute bottom-0 w-full bg-slate-600 h-[41%]"></div>
+</div>
+<span class="text-[10px] text-slate-500">Day 5 (A)</span>
+</div>
+<div class="flex flex-col items-center gap-2 w-full group">
+<div class="w-full bg-primary/10 h-full rounded-t-sm relative overflow-hidden group-hover:bg-primary/20 transition-colors">
+<div class="absolute bottom-0 w-full bg-primary h-[68%]"></div>
+</div>
+<span class="text-[10px] text-slate-500 font-bold text-primary">Day 6 (B)</span>
+</div>
+</div>
+</div>
+<!-- Pro Insight (Banner) -->
+<div class="bg-gradient-to-r from-yellow-900/20 to-surface-dark border border-yellow-700/30 rounded-lg p-4 flex items-start gap-4">
+<div class="p-2 bg-yellow-500/10 rounded-lg text-yellow-500 shrink-0">
+<span class="material-symbols-outlined">lock</span>
+</div>
+<div>
+<h4 class="text-yellow-500 font-bold text-sm mb-1">Insight Pro</h4>
+<p class="text-slate-300 text-sm leading-relaxed">Las miniaturas con texto amarillo brillante y alto contraste funcionaron un <span class="text-white font-medium">15% mejor</span> en este nicho específico durante la última semana.</p>
+<a class="text-yellow-500 text-xs font-semibold mt-2 inline-flex items-center hover:underline" href="#">
+                            Desbloquear todos los insights
+                            <span class="material-symbols-outlined text-[14px] ml-1">arrow_forward</span>
+</a>
+</div>
+</div>
+</div>
+<!-- Right Column: Comparison Details -->
+<div class="flex flex-col gap-6">
+<div class="flex items-center justify-between">
+<h3 class="text-lg font-bold text-white">Detalle Comparativo</h3>
+<button class="text-xs text-slate-400 hover:text-white flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">download</span>
+                        CSV
+                    </button>
+</div>
+<!-- Variant A Card (Loser) -->
+<div class="bg-surface-dark border border-surface-border rounded-xl p-5 flex flex-col gap-4 opacity-75 hover:opacity-100 transition-opacity">
+<div class="flex items-center justify-between">
+<span class="text-slate-400 font-medium text-sm">Variante A (Control)</span>
+<span class="text-xs bg-slate-800 text-slate-400 px-2 py-1 rounded">Original</span>
+</div>
+<div class="aspect-video w-full rounded-lg overflow-hidden border border-surface-border relative grayscale hover:grayscale-0 transition-all">
+<div class="w-full h-full bg-cover bg-center" data-alt="Original thumbnail showing a person smiling at a laptop screen" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCTEGjqhJ0zn7L7GUcRpg3an7K00ju1ZoCbef9UyZ1twUuC6QWc2avQV8DCohvhpEavp36LfQ1bPiOf45P6rtIbUcuv4hsFASMiq9kCLSzyumQZC9R4a_4BcWIzXbTvL_8qGilpZ4d5nG2oMdRQqzXMMR_qeAmrd4PGBkatIjdOfBqITO9B7yMVwKHNKpYKh0yhpH-fBOzA2SnXdkw1KFOF6Z51P7mipHDYSGXSqgebh39maTUp9L9reo-pGmEOx0IDv92iWS9v_kb2');"></div>
+</div>
+<div class="grid grid-cols-2 gap-4 pt-2">
+<div>
+<p class="text-slate-500 text-xs mb-1">CTR</p>
+<p class="text-xl font-bold text-slate-300">4.0%</p>
+</div>
+<div>
+<p class="text-slate-500 text-xs mb-1">Impresiones</p>
+<p class="text-xl font-bold text-slate-300">12.5K</p>
+</div>
+<div class="col-span-2">
+<p class="text-slate-500 text-xs mb-1">Clics Totales</p>
+<p class="text-base font-medium text-slate-300">500</p>
+</div>
+</div>
+</div>
+<!-- Variant B Card (Winner) -->
+<div class="bg-surface-dark border border-green-500/30 rounded-xl p-5 flex flex-col gap-4 shadow-[0_0_20px_rgba(34,197,94,0.05)] relative overflow-hidden">
+<div class="absolute top-0 right-0 w-16 h-16 bg-gradient-to-bl from-green-500/20 to-transparent"></div>
+<div class="flex items-center justify-between relative z-10">
+<span class="text-white font-bold text-sm flex items-center gap-2">
+                            Variante B (Test)
+                            <span class="material-symbols-outlined text-green-500 text-sm">check_circle</span>
+</span>
+<span class="text-xs bg-green-500/10 text-green-500 border border-green-500/20 px-2 py-1 rounded font-medium">Ganadora</span>
+</div>
+<div class="aspect-video w-full rounded-lg overflow-hidden border border-green-500/30 relative">
+<div class="w-full h-full bg-cover bg-center transform hover:scale-105 transition-transform duration-500" data-alt="Winning thumbnail showing a person analyzing social media statistics on a phone with excited expression" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCFXKB5-0jqoo0SDkOdJixXuAHcPjmpBNcXjWOi7rrjORBaJE4hQeJkm2EIay9T5dt3C6rjHUTNTFOjlvtS7cUWdOFz4ZbqTJb6V-9RSQ1FztOPSW9DTza7qyo9rKsXtf0ZuAiK2X2pWSurgKYkI4DAFLty7ZyEt-nk4G2jryou4nBJ_ll9pJ1npqLVffSzZRgIRlDmx76G9FjWdR-gMY16Y2cZ8Ch00jYTnXCMLmV_epTPe1r-C6smLEWqmke2C5hHNvKGOlCv1mWH');"></div>
+</div>
+<div class="grid grid-cols-2 gap-4 pt-2 relative z-10">
+<div>
+<p class="text-slate-500 text-xs mb-1">CTR</p>
+<div class="flex items-end gap-2">
+<p class="text-xl font-bold text-white">5.5%</p>
+<span class="text-xs text-green-500 font-bold mb-1">+37%</span>
+</div>
+</div>
+<div>
+<p class="text-slate-500 text-xs mb-1">Impresiones</p>
+<p class="text-xl font-bold text-white">12.8K</p>
+</div>
+<div class="col-span-2">
+<p class="text-slate-500 text-xs mb-1">Clics Totales</p>
+<p class="text-base font-medium text-white">704 <span class="text-green-500 text-xs ml-1">(+204)</span></p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>

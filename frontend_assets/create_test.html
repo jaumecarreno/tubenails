@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>CTR Sniper - Crear Nuevo Test A/B</title>
+<!-- Fonts & Icons -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Configuration -->
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#ff0000",
+                        "primary-hover": "#cc0000",
+                        "background-light": "#f8f5f5",
+                        "background-dark": "#0f0f0f", /* Darker than example to match gray-900 feel */
+                        "surface-dark": "#1a1a1a", /* Card background */
+                        "border-dark": "#333333",
+                        "text-secondary": "#a1a1aa",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"],
+                        "body": ["Inter", "sans-serif"],
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.375rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "2xl": "1rem",
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+        /* Custom scrollbar for horizontal lists */
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 min-h-screen flex flex-col">
+<!-- Top Navigation Bar -->
+<header class="sticky top-0 z-50 w-full border-b border-gray-200 dark:border-border-dark bg-white/80 dark:bg-background-dark/80 backdrop-blur-md">
+<div class="max-w-[960px] mx-auto px-6 h-16 flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="text-primary">
+<span class="material-symbols-outlined text-3xl">target</span>
+</div>
+<h1 class="font-bold text-lg tracking-tight">CTR Sniper</h1>
+</div>
+<div class="flex items-center gap-6">
+<nav class="hidden md:flex items-center gap-6">
+<a class="text-sm font-medium text-slate-500 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white transition-colors" href="#">Dashboard</a>
+<a class="text-sm font-medium text-slate-500 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white transition-colors" href="#">Analytics</a>
+<a class="text-sm font-medium text-slate-500 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white transition-colors" href="#">Settings</a>
+</nav>
+<div class="h-8 w-[1px] bg-gray-200 dark:bg-border-dark hidden md:block"></div>
+<div class="flex items-center gap-3">
+<div class="bg-center bg-no-repeat bg-cover rounded-full size-8 ring-2 ring-gray-100 dark:ring-border-dark" data-alt="User avatar profile picture" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBPUvMEz1Iwmh-l0_UFxxw43w8zq98HlpJsiWod9gp3SbUauvRvWcRNhoznfcI8_8rj6r8YKVj9xOjbXFiU52jdNGcKVWaOuKry1oO9_ZO3-x4AP7CuhxPrKqXl3zWF0JUAOyZPatLr19kT6njIHFDZ8PjYxuHurnjg1ADDYc40gvfO4mrSBBP3bzAwWQsdN0PL_hzLO9UxB54UDA55k6nkas54ItGvdhyjejSfpIsuHw8Nx06Qvvp0TogfDgkvTLb-wSZNtdsdLCMY");'></div>
+</div>
+</div>
+</div>
+</header>
+<!-- Main Content Area -->
+<main class="flex-1 w-full max-w-[840px] mx-auto px-4 py-8 pb-32">
+<!-- Page Header -->
+<div class="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
+<div>
+<a class="inline-flex items-center gap-1 text-sm text-text-secondary hover:text-white transition-colors mb-2 group" href="#">
+<span class="material-symbols-outlined text-[18px] group-hover:-translate-x-1 transition-transform">chevron_left</span>
+                    Volver al Dashboard
+                </a>
+<h2 class="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">Configurar Nuevo Test A/B</h2>
+<p class="text-slate-500 dark:text-text-secondary mt-1">Maximiza tu CTR comparando miniaturas y títulos con precisión estadística.</p>
+</div>
+</div>
+<!-- STEP 1: Video Selection -->
+<section class="bg-white dark:bg-surface-dark border border-gray-200 dark:border-border-dark rounded-xl p-6 mb-6 shadow-sm">
+<div class="flex items-center gap-3 mb-5">
+<div class="flex items-center justify-center size-8 rounded-full bg-primary/10 text-primary font-bold text-sm">1</div>
+<h3 class="text-lg font-semibold text-slate-900 dark:text-white">¿Qué vídeo quieres optimizar?</h3>
+</div>
+<div class="space-y-6">
+<!-- Search Input -->
+<div class="relative group">
+<div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400 group-focus-within:text-primary transition-colors">
+<span class="material-symbols-outlined">link</span>
+</div>
+<input class="block w-full pl-10 pr-3 py-3 border border-gray-200 dark:border-border-dark rounded-lg leading-5 bg-gray-50 dark:bg-[#222] text-slate-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition duration-150 ease-in-out sm:text-sm" placeholder="Pega la URL de YouTube aquí (ej: https://youtube.com/watch?v=...)" type="text"/>
+<button class="absolute inset-y-1 right-1 px-3 bg-gray-200 dark:bg-border-dark hover:bg-gray-300 dark:hover:bg-[#444] text-xs font-medium rounded text-slate-700 dark:text-gray-300 transition-colors">
+                        Importar
+                    </button>
+</div>
+<!-- Recent Videos Carousel -->
+<div>
+<div class="flex items-center justify-between mb-3">
+<span class="text-xs font-semibold text-text-secondary uppercase tracking-wider">Videos Recientes</span>
+<button class="text-xs text-primary hover:text-primary-hover font-medium">Ver todos</button>
+</div>
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+<!-- Video Card 1 (Selected) -->
+<div class="relative group cursor-pointer border-2 border-primary bg-gray-50 dark:bg-[#222] rounded-lg overflow-hidden transition-all shadow-md">
+<div class="absolute top-2 right-2 bg-primary text-white text-[10px] font-bold px-2 py-0.5 rounded-full z-10">SELECTED</div>
+<div class="aspect-video w-full bg-cover bg-center" data-alt="Thumbnail of a coding tutorial video with code on screen" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuApLK3Aw6EaJJ0-5ndpW47kVU5jAX2Oq-pBjhKm_X1FH4OTlWzg0m-A-wPWwpeRyZp4wLAp0_LGW4rxUOWhbAKSsokBgQ8syzf3AqyO7X0P4iUC3Kq43jteH0VREK1H-6kXBcwXZwjaKCYcN-kAUHCorFZGEbSagswD4IqyTi_lHS2yYPzQnGo0pDVTt348lu5x-oLkkud_yD59NdbvxLhqBmemQxb4pjQQccZ519L8Ul0pmas3oAcgV48k-hi0Qpk2ECtQhpb_96Vy");'></div>
+<div class="p-3">
+<p class="text-sm font-medium text-slate-900 dark:text-white truncate">Cómo programar en Python 2024</p>
+<div class="flex items-center gap-2 mt-1">
+<span class="text-xs text-text-secondary">Subido hace 2 días</span>
+<span class="size-1 bg-gray-500 rounded-full"></span>
+<span class="text-xs text-green-500 font-medium">3.2% CTR</span>
+</div>
+</div>
+</div>
+<!-- Video Card 2 -->
+<div class="relative group cursor-pointer border border-gray-200 dark:border-border-dark hover:border-gray-400 dark:hover:border-gray-600 bg-gray-50 dark:bg-[#222] rounded-lg overflow-hidden transition-all">
+<div class="aspect-video w-full bg-cover bg-center opacity-80 group-hover:opacity-100 transition-opacity" data-alt="Thumbnail showing a modern desk setup with computer" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuDhBXiwka0D9f0SatMFka_iQvzJSFw6TbylvbLUkcCJPrGBgEhLfqpTo1CiZt0xwhbiaQ9O8WMcgP1HNeDGkKI3HZaS2zGCQ9FkDSvpXxGZqSje8-vCNL_Wh5SML2zoaZ_vK41sQzaU24kuya5c-XPDnNsZLkqZRr6UG0pIj1ilwGRPlP2pH7wJSO8UvNVHPr03YP9yP42-0ePcvGi5O0mPEqbuCWvnfw6GqUBs7otAPeRr9Y1gMEcUC2AbDayqWkgXaF_4uAG9IJbG");'></div>
+<div class="p-3">
+<p class="text-sm font-medium text-slate-900 dark:text-white truncate">Mi Setup de Productividad</p>
+<div class="flex items-center gap-2 mt-1">
+<span class="text-xs text-text-secondary">Subido hace 5 días</span>
+</div>
+</div>
+</div>
+<!-- Video Card 3 -->
+<div class="relative group cursor-pointer border border-gray-200 dark:border-border-dark hover:border-gray-400 dark:hover:border-gray-600 bg-gray-50 dark:bg-[#222] rounded-lg overflow-hidden transition-all">
+<div class="aspect-video w-full bg-cover bg-center opacity-80 group-hover:opacity-100 transition-opacity" data-alt="Thumbnail of laptop screen showing code editor" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuA1XOq_NyTsPm_umHSC4l5_ITuUZiZ0payuueDln03dEbaSwvzPT-s716h6-b1mNDPKz0pph2HdNCtI2n1qSM2OR24JvSadIxTpz-GMqAyq4CcTakmS0UYczL5HwAo1cpY-bElXGIuZpRIv0Jpx4mUGnr7Dt0KZ5PSxZE5r49pyM7F0NZVS0zIdwodSJj_7UWIMAZ7ubALGWLFNREoKJvtlY82ylcgSNt5lUL3p2ROH_y0ebX0OQ9h6X0p4iPYyfmZadlWGynU-GE0u");'></div>
+<div class="p-3">
+<p class="text-sm font-medium text-slate-900 dark:text-white truncate">Vlog: Un día en mi vida</p>
+<div class="flex items-center gap-2 mt-1">
+<span class="text-xs text-text-secondary">Subido hace 1 sem</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- STEP 2: Define Variants -->
+<section class="bg-white dark:bg-surface-dark border border-gray-200 dark:border-border-dark rounded-xl p-6 mb-6 shadow-sm">
+<div class="flex items-center gap-3 mb-5">
+<div class="flex items-center justify-center size-8 rounded-full bg-primary/10 text-primary font-bold text-sm">2</div>
+<h3 class="text-lg font-semibold text-slate-900 dark:text-white">Define tus Variantes</h3>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+<!-- Variant A (Control) -->
+<div class="flex flex-col gap-3">
+<div class="flex items-center justify-between">
+<span class="text-xs font-bold text-text-secondary uppercase tracking-wider flex items-center gap-2">
+<span class="size-2 rounded-full bg-blue-500"></span>
+                            Variante A (Control)
+                        </span>
+<span class="text-[10px] bg-gray-100 dark:bg-border-dark text-text-secondary px-2 py-0.5 rounded">Solo Lectura</span>
+</div>
+<div class="relative aspect-video w-full rounded-lg overflow-hidden border border-gray-200 dark:border-border-dark">
+<div class="absolute inset-0 bg-cover bg-center" data-alt="Current active youtube video thumbnail" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuCBDB9TqIHjY6xU3QMPqpex3pk6VPUqHkoOVvRnT85N_XpvEYybS9Do6U5NYuOCpedjS7XzQDrs542wgsCrBg_Y-k6yO3Kn3TVYzmCgA1fne3kvzDmqdd2Jgv-tb_869TvrMO62AmUp4Iwonn7o5BnEHCgJDKKFqMksHgc8HNJaw1cvfkmPDr7XUqiXPSByYQqIpFGK89n8UB_CwqzUgp5IMU1JmFFHeTpAI5phgGLcYygoDRff7yMoLf8UkHEYJXKAC3JCr6TlOuCq");'></div>
+<div class="absolute bottom-2 right-2 bg-black/80 text-white text-xs font-medium px-1.5 py-0.5 rounded">12:45</div>
+</div>
+<div>
+<label class="block text-xs font-medium text-text-secondary mb-1.5">Título del Video</label>
+<input class="block w-full px-3 py-2.5 border border-gray-200 dark:border-border-dark rounded-lg bg-gray-100 dark:bg-[#222] text-gray-500 dark:text-gray-400 text-sm cursor-not-allowed opacity-75" disabled="" type="text" value="Cómo programar en Python 2024"/>
+</div>
+</div>
+<!-- Variant B (Test) -->
+<div class="flex flex-col gap-3">
+<div class="flex items-center justify-between">
+<span class="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-2">
+<span class="size-2 rounded-full bg-primary animate-pulse"></span>
+                            Variante B (Test)
+                        </span>
+<span class="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded font-medium">Editable</span>
+</div>
+<!-- Drag & Drop Zone -->
+<div class="relative aspect-video w-full rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-[#222]/50 hover:bg-gray-100 dark:hover:bg-[#222] hover:border-primary/50 transition-colors group cursor-pointer flex flex-col items-center justify-center text-center p-4">
+<span class="material-symbols-outlined text-4xl text-gray-400 mb-2 group-hover:text-primary transition-colors">cloud_upload</span>
+<p class="text-sm font-medium text-slate-700 dark:text-gray-300">Arrastra tu miniatura aquí</p>
+<p class="text-xs text-text-secondary mt-1">JPG, PNG o WEBP (Max 2MB)</p>
+<button class="mt-3 px-3 py-1.5 bg-white dark:bg-border-dark border border-gray-200 dark:border-gray-600 rounded text-xs font-medium text-slate-700 dark:text-gray-300 shadow-sm hover:text-primary dark:hover:text-primary transition-colors">
+                            Seleccionar Archivo
+                        </button>
+</div>
+<div>
+<label class="block text-xs font-medium text-text-secondary mb-1.5">Nuevo Título (Opcional)</label>
+<input class="block w-full px-3 py-2.5 border border-gray-200 dark:border-border-dark rounded-lg bg-white dark:bg-[#222] text-slate-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition duration-150 ease-in-out text-sm" placeholder="Escribe un título alternativo..." type="text"/>
+</div>
+</div>
+</div>
+<!-- Add Variant C Button (Pro Upsell) -->
+<div class="mt-6 pt-6 border-t border-gray-100 dark:border-border-dark flex justify-center">
+<button class="group flex items-center gap-2 px-4 py-2 rounded-lg border border-dashed border-gray-300 dark:border-gray-600 text-sm font-medium text-text-secondary hover:text-slate-900 dark:hover:text-white hover:border-gray-400 dark:hover:border-gray-500 transition-all bg-transparent hover:bg-gray-50 dark:hover:bg-[#222]">
+<span class="material-symbols-outlined text-base">lock</span>
+                    Añadir Variante C
+                    <span class="bg-gradient-to-r from-amber-200 to-yellow-400 text-yellow-900 text-[10px] font-bold px-1.5 py-0.5 rounded ml-1 group-hover:scale-105 transition-transform">PRO</span>
+</button>
+</div>
+</section>
+<!-- STEP 3: Duration -->
+<section class="bg-white dark:bg-surface-dark border border-gray-200 dark:border-border-dark rounded-xl p-6 mb-24 shadow-sm">
+<div class="flex items-center gap-3 mb-5">
+<div class="flex items-center justify-center size-8 rounded-full bg-primary/10 text-primary font-bold text-sm">3</div>
+<h3 class="text-lg font-semibold text-slate-900 dark:text-white">Duración del Test</h3>
+</div>
+<div class="flex flex-col sm:flex-row gap-4">
+<!-- Duration Options -->
+<div class="flex-1 grid grid-cols-3 gap-3">
+<label class="cursor-pointer">
+<input class="peer sr-only" name="duration" type="radio" value="4"/>
+<div class="flex flex-col items-center justify-center p-3 rounded-lg border border-gray-200 dark:border-border-dark bg-gray-50 dark:bg-[#222] peer-checked:bg-primary/10 peer-checked:border-primary peer-checked:text-primary transition-all h-full">
+<span class="text-lg font-bold">4</span>
+<span class="text-xs font-medium uppercase tracking-wide">Días</span>
+</div>
+</label>
+<label class="cursor-pointer">
+<input checked="" class="peer sr-only" name="duration" type="radio" value="7"/>
+<div class="flex flex-col items-center justify-center p-3 rounded-lg border border-gray-200 dark:border-border-dark bg-gray-50 dark:bg-[#222] peer-checked:bg-primary/10 peer-checked:border-primary peer-checked:text-primary transition-all h-full">
+<span class="text-lg font-bold">7</span>
+<span class="text-xs font-medium uppercase tracking-wide">Días</span>
+</div>
+</label>
+<label class="cursor-pointer">
+<input class="peer sr-only" name="duration" type="radio" value="14"/>
+<div class="flex flex-col items-center justify-center p-3 rounded-lg border border-gray-200 dark:border-border-dark bg-gray-50 dark:bg-[#222] peer-checked:bg-primary/10 peer-checked:border-primary peer-checked:text-primary transition-all h-full">
+<span class="text-lg font-bold">14</span>
+<span class="text-xs font-medium uppercase tracking-wide">Días</span>
+</div>
+</label>
+</div>
+<!-- Info Callout -->
+<div class="flex-1 bg-cyan-500/10 border border-cyan-500/20 rounded-lg p-4 flex gap-3">
+<span class="material-symbols-outlined text-cyan-400 shrink-0">info</span>
+<div class="text-sm">
+<p class="font-medium text-cyan-100 mb-1">Metodología de Rotación</p>
+<p class="text-cyan-200/70 text-xs leading-relaxed">
+                            El sistema rotará la miniatura y título cada 24h a media noche (UTC) para asegurar que cada variante reciba la misma exposición en diferentes días de la semana.
+                        </p>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Fixed Footer Action -->
+<footer class="fixed bottom-0 w-full bg-white dark:bg-background-dark/90 backdrop-blur-lg border-t border-gray-200 dark:border-border-dark p-4 z-40">
+<div class="max-w-[840px] mx-auto flex items-center justify-between gap-4">
+<div class="hidden sm:block">
+<p class="text-sm text-text-secondary">Se requiere un mínimo de <strong class="text-slate-900 dark:text-white">1,000 impresiones</strong> para resultados fiables.</p>
+</div>
+<button class="w-full sm:w-auto flex-1 sm:flex-none flex items-center justify-center gap-2 bg-primary hover:bg-primary-hover text-white font-bold py-3 px-8 rounded-lg shadow-[0_0_20px_rgba(255,0,0,0.3)] transition-all hover:shadow-[0_0_25px_rgba(255,0,0,0.5)] transform active:scale-95">
+<span class="material-symbols-outlined">rocket_launch</span>
+                Iniciar Test A/B Ahora
+            </button>
+</div>
+</footer>
+</body></html>
