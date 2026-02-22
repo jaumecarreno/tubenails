@@ -38,12 +38,15 @@ app.get('/api/auth/google', (req: Request, res: Response) => {
 app.get('/api/auth/google/callback', async (req: Request, res: Response) => {
     const code = req.query.code as string;
     const state = req.query.state as string; // This is the userId
+    console.log('[OAuth Callback] Received. code exists:', !!code, ', state/userId:', state);
     try {
         await handleGoogleCallback(code, state);
+        console.log('[OAuth Callback] Success! Redirecting to', `${FRONTEND_URL}/settings`);
         // Correctly redirect the user back to the Single Page App (supporting production domains)
         res.redirect(`${FRONTEND_URL}/settings`);
-    } catch (error) {
-        console.error('Error in OAuth callback:', error);
+    } catch (error: any) {
+        console.error('[OAuth Callback] FULL ERROR:', error?.message || error);
+        console.error('[OAuth Callback] Error details:', JSON.stringify(error?.response?.data || error?.code || 'no details'));
         res.redirect(`${FRONTEND_URL}/settings?error=oauth_failed`);
     }
 });
