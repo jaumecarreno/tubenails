@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from './AuthProvider';
 import { useI18n } from './LanguageProvider';
@@ -11,6 +12,7 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
     const { user, loading } = useAuth();
     const pathname = usePathname();
     const { t } = useI18n();
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
     if (loading) {
         return null;
@@ -34,9 +36,22 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
         await supabase.auth.signOut();
     };
 
+    const closeMobileMenu = () => {
+        setIsMobileMenuOpen(false);
+    };
+
     return (
         <div className="flex h-screen bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 overflow-hidden">
-            <aside className="fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-surface-dark border-r border-slate-200 dark:border-slate-700 flex flex-col transition-transform duration-300 transform -translate-x-full lg:translate-x-0 lg:static lg:inset-auto flex-shrink-0">
+            {isMobileMenuOpen && (
+                <button
+                    type="button"
+                    aria-label="Close menu"
+                    className="fixed inset-0 z-40 bg-slate-950/40 lg:hidden"
+                    onClick={closeMobileMenu}
+                />
+            )}
+
+            <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-surface-dark border-r border-slate-200 dark:border-slate-700 flex flex-col transition-transform duration-300 transform ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 lg:static lg:inset-auto flex-shrink-0`}>
                 <div className="h-16 flex items-center gap-3 px-6 border-b border-slate-200 dark:border-slate-700">
                     <div className="relative flex flex-shrink-0 items-center justify-center w-8 h-8 rounded bg-primary/10 text-primary">
                         <span className="material-symbols-outlined text-xl">ads_click</span>
@@ -49,15 +64,15 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
                 </div>
 
                 <nav className="flex-1 overflow-y-auto py-6 px-3 space-y-1">
-                    <Link href="/" className={`flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-colors ${pathname === '/' ? 'bg-primary/10 text-primary' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-surface-dark-hover hover:text-slate-900 dark:hover:text-white'}`}>
+                    <Link href="/" onClick={closeMobileMenu} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-colors ${pathname === '/' ? 'bg-primary/10 text-primary' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-surface-dark-hover hover:text-slate-900 dark:hover:text-white'}`}>
                         <span className="material-symbols-outlined" style={{ fontVariationSettings: pathname === '/' ? "'FILL' 1" : "'FILL' 0" }}>dashboard</span>
                         {t('layout.nav.dashboard')}
                     </Link>
-                    <Link href="/new" className={`flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-colors ${pathname === '/new' ? 'bg-primary/10 text-primary' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-surface-dark-hover hover:text-slate-900 dark:hover:text-white'}`}>
+                    <Link href="/new" onClick={closeMobileMenu} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-colors ${pathname === '/new' ? 'bg-primary/10 text-primary' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-surface-dark-hover hover:text-slate-900 dark:hover:text-white'}`}>
                         <span className="material-symbols-outlined" style={{ fontVariationSettings: pathname === '/new' ? "'FILL' 1" : "'FILL' 0" }}>add_circle</span>
                         {t('layout.nav.newTest')}
                     </Link>
-                    <Link href="/settings" className={`flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-colors ${pathname === '/settings' ? 'bg-primary/10 text-primary' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-surface-dark-hover hover:text-slate-900 dark:hover:text-white'}`}>
+                    <Link href="/settings" onClick={closeMobileMenu} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-colors ${pathname === '/settings' ? 'bg-primary/10 text-primary' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-surface-dark-hover hover:text-slate-900 dark:hover:text-white'}`}>
                         <span className="material-symbols-outlined" style={{ fontVariationSettings: pathname === '/settings' ? "'FILL' 1" : "'FILL' 0" }}>settings</span>
                         {t('layout.nav.settings')}
                     </Link>
@@ -81,6 +96,18 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
             </aside>
 
             <main className="flex-1 overflow-y-auto relative">
+                <div className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-slate-200 bg-white/95 px-4 backdrop-blur-sm dark:border-slate-700 dark:bg-surface-dark/95 lg:hidden">
+                    <button
+                        type="button"
+                        aria-label="Open menu"
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-md text-slate-700 transition-colors hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-surface-dark-hover"
+                        onClick={() => setIsMobileMenuOpen(true)}
+                    >
+                        <span className="material-symbols-outlined">menu</span>
+                    </button>
+                    <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">CTR Sniper</p>
+                    <LanguageSelector compact />
+                </div>
                 {children}
             </main>
         </div>
