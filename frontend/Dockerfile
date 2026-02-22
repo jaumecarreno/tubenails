@@ -3,11 +3,13 @@ WORKDIR /app
 
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Accept build args for Next.js public env vars (needed at build time)
+# Accept build args for Next.js (needed at build time)
 ARG NEXT_PUBLIC_SUPABASE_URL
 ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
+ARG BACKEND_URL=http://backend:3000
 ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
 ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
+ENV BACKEND_URL=$BACKEND_URL
 
 COPY package*.json ./
 RUN npm ci
