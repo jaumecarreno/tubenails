@@ -1,33 +1,72 @@
 import { google } from 'googleapis';
 import { getClientForUser } from './auth';
 import * as fs from 'fs';
-import * as https from 'https';
 import * as path from 'path';
 
-// Helper to download an image from a URL to a temporary local file
-// YouTube's thumbnails.set requires a media stream/file, not just a URL.
-async function downloadImageToTemp(url: string, filepath: string): Promise<void> {
-    return new Promise((resolve, reject) => {
-        const file = fs.createWriteStream(filepath);
-        https.get(url, (response) => {
-            response.pipe(file);
-            file.on('finish', () => {
-                file.close();
-                resolve();
-            });
-        }).on('error', (err) => {
-            fs.unlink(filepath, () => { });
-            reject(err);
-        });
-    });
+const DATA_IMAGE_URL_REGEX = /^data:(image\/(?:png|jpeg|jpg|webp));base64,([A-Za-z0-9+/=]+)$/i;
+
+function extensionFromMimeType(mimeType: string): string {
+    const normalized = mimeType.toLowerCase();
+    if (normalized.includes('png')) {
+        return 'png';
+    }
+    if (normalized.includes('webp')) {
+        return 'webp';
+    }
+    return 'jpg';
 }
 
+function parseDataImageUrl(source: string): { mimeType: string; payload: string } | null {
+    const match = source.match(DATA_IMAGE_URL_REGEX);
+    if (!match) {
+        return null;
+    }
+    return {
+        mimeType: match[1],
+        payload: match[2]
+    };
+}
+
+async function writeThumbnailSourceToTemp(source: string, filepath: string): Promise<void> {
+    const dataImage = parseDataImageUrl(source);
+    if (dataImage) {
+        const buffer = Buffer.from(dataImage.payload, 'base64');
+        if (buffer.length === 0) {
+            throw new Error('Uploaded thumbnail is empty');
+        }
+        await fs.promises.writeFile(filepath, buffer);
+        return;
+    }
+
+    let url: URL;
+    try {
+        url = new URL(source);
+    } catch {
+        throw new Error('Invalid thumbnail source');
+    }
+
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+        throw new Error('Thumbnail source must use HTTP/HTTPS');
+    }
+
+    const response = await fetch(url.toString());
+    if (!response.ok) {
+        throw new Error(`Failed downloading thumbnail (${response.status})`);
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    if (buffer.length === 0) {
+        throw new Error('Downloaded thumbnail is empty');
+    }
+
+    await fs.promises.writeFile(filepath, buffer);
+}
 
 export async function getChannelVideos(userId: string, maxResults: number = 10) {
     const auth = await getClientForUser(userId);
     const youtube = google.youtube({ version: 'v3', auth });
 
-    // Step 1: Get the channel's "Uploads" playlist ID (Cost: 1 API Unit)
     const channelRes = await youtube.channels.list({
         part: ['contentDetails'],
         mine: true
@@ -43,18 +82,17 @@ export async function getChannelVideos(userId: string, maxResults: number = 10) 
         return { channelId, videos: [] };
     }
 
-    // Step 2: Fetch the videos from the "Uploads" playlist (Cost: 1 API Unit)
     const playlistRes = await youtube.playlistItems.list({
         part: ['snippet'],
         playlistId: uploadsPlaylistId,
-        maxResults: maxResults
+        maxResults
     });
 
     if (!playlistRes.data.items) {
         return { channelId, videos: [] };
     }
 
-    const videos = playlistRes.data.items.map(item => ({
+    const videos = playlistRes.data.items.map((item) => ({
         videoId: item.snippet?.resourceId?.videoId || '',
         title: item.snippet?.title || '',
         thumbnailUrl: item.snippet?.thumbnails?.high?.url || item.snippet?.thumbnails?.medium?.url || item.snippet?.thumbnails?.default?.url || '',
@@ -84,17 +122,19 @@ export async function getVideoDetails(userId: string, videoId: string) {
     };
 }
 
-export async function updateVideoThumbnail(userId: string, videoId: string, thumbnailUrl: string) {
+export async function updateVideoThumbnail(userId: string, videoId: string, thumbnailSource: string) {
     const auth = await getClientForUser(userId);
     const youtube = google.youtube({ version: 'v3', auth });
 
-    const tempFilePath = path.join(__dirname, `../temp_thumb_${videoId}_${Date.now()}.jpg`);
+    const parsedDataImage = parseDataImageUrl(thumbnailSource);
+    const extension = parsedDataImage ? extensionFromMimeType(parsedDataImage.mimeType) : 'jpg';
+    const tempFilePath = path.join(__dirname, `../temp_thumb_${videoId}_${Date.now()}.${extension}`);
 
     try {
-        await downloadImageToTemp(thumbnailUrl, tempFilePath);
+        await writeThumbnailSourceToTemp(thumbnailSource, tempFilePath);
 
         const res = await youtube.thumbnails.set({
-            videoId: videoId,
+            videoId,
             media: {
                 body: fs.createReadStream(tempFilePath)
             }
@@ -112,7 +152,6 @@ export async function updateVideoTitle(userId: string, videoId: string, newTitle
     const auth = await getClientForUser(userId);
     const youtube = google.youtube({ version: 'v3', auth });
 
-    // First, we need to get the existing video snippet to preserve categoryId, description etc.
     const videoParams = await youtube.videos.list({
         part: ['snippet'],
         id: [videoId]
@@ -123,20 +162,20 @@ export async function updateVideoTitle(userId: string, videoId: string, newTitle
     }
 
     const snippet = videoParams.data.items[0].snippet;
+    if (!snippet) {
+        throw new Error('Snippet is missing');
+    }
 
-    if (!snippet) throw new Error('Snippet is missing');
-
-    // Update title
     snippet.title = newTitle;
-
-    // YouTube API sometimes requires categoryId in the update payload
-    if (!snippet.categoryId) snippet.categoryId = "22";
+    if (!snippet.categoryId) {
+        snippet.categoryId = '22';
+    }
 
     const res = await youtube.videos.update({
         part: ['snippet'],
         requestBody: {
             id: videoId,
-            snippet: snippet
+            snippet
         }
     });
 
@@ -148,8 +187,6 @@ export async function getDailyAnalytics(userId: string, videoId: string, dateStr
     const auth = await getClientForUser(userId);
     const analytics = google.youtubeAnalytics({ version: 'v2', auth });
 
-    // Use thumbnail-impression metrics so estimated clicks can be calculated as
-    // impressions * (impressionsCtr / 100).
     const res = await analytics.reports.query({
         ids: 'channel==MINE',
         startDate: dateStr,

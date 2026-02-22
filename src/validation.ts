@@ -3,6 +3,48 @@ import { z } from 'zod';
 const YOUTUBE_ID_REGEX = /^[a-zA-Z0-9_-]{6,20}$/;
 const PLAIN_VIDEO_ID_REGEX = /^[a-zA-Z0-9_-]{3,50}$/;
 const ALLOWED_DURATIONS = [4, 7, 14] as const;
+const DATA_IMAGE_URL_REGEX = /^data:image\/(png|jpeg|jpg|webp);base64,([A-Za-z0-9+/=]+)$/i;
+
+const MAX_THUMBNAIL_UPLOAD_BYTES = 2 * 1024 * 1024;
+
+function isHttpUrl(value: string): boolean {
+    try {
+        const parsed = new URL(value);
+        return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    } catch {
+        return false;
+    }
+}
+
+function getDataUrlBytes(value: string): number | null {
+    const match = value.match(DATA_IMAGE_URL_REGEX);
+    if (!match) {
+        return null;
+    }
+
+    try {
+        const buffer = Buffer.from(match[2], 'base64');
+        return buffer.length;
+    } catch {
+        return null;
+    }
+}
+
+function isDataImageUrl(value: string): boolean {
+    return DATA_IMAGE_URL_REGEX.test(value);
+}
+
+function isValidThumbnailSource(value: string): boolean {
+    return isHttpUrl(value) || isDataImageUrl(value);
+}
+
+function isWithinThumbnailLimit(value: string): boolean {
+    const bytes = getDataUrlBytes(value);
+    if (bytes === null) {
+        return true;
+    }
+    return bytes > 0 && bytes <= MAX_THUMBNAIL_UPLOAD_BYTES;
+}
 
 export function extractYoutubeVideoId(rawValue: string): string | null {
     const input = rawValue.trim();
@@ -52,8 +94,18 @@ export const createTestSchema = z.object({
         .refine((value) => value !== null, 'videoId is invalid'),
     titleA: z.string().trim().min(1, 'titleA is required').max(255, 'titleA is too long'),
     titleB: z.string().trim().max(255, 'titleB is too long').optional().default(''),
-    thumbnailA: z.string().trim().url('thumbnailA must be a valid URL').max(2048, 'thumbnailA is too long'),
-    thumbnailB: z.string().trim().url('thumbnailB must be a valid URL').max(2048, 'thumbnailB is too long'),
+    thumbnailA: z
+        .string()
+        .trim()
+        .max(2048, 'thumbnailA is too long')
+        .refine((value) => isHttpUrl(value), 'thumbnailA must be a valid HTTP/HTTPS URL'),
+    thumbnailB: z
+        .string()
+        .trim()
+        .min(1, 'thumbnailB is required')
+        .max(3_000_000, 'thumbnailB payload is too large')
+        .refine((value) => isValidThumbnailSource(value), 'thumbnailB must be an image URL or uploaded image data')
+        .refine((value) => isWithinThumbnailLimit(value), 'Uploaded thumbnail must be <= 2MB'),
     durationDays: z
         .coerce
         .number()
