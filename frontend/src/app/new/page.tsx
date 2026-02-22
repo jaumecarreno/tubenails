@@ -19,13 +19,15 @@ export default function CreateTestPage() {
 
     const [recentVideos, setRecentVideos] = useState<any[]>([]);
     const [fetchingVideos, setFetchingVideos] = useState(true);
+    const [channelId, setChannelId] = useState('');
 
     // Fetch initial channel videos
     useEffect(() => {
         async function loadVideos() {
             try {
                 const res = await axios.get('/api/youtube/videos');
-                setRecentVideos(res.data);
+                setRecentVideos(res.data.videos || []);
+                setChannelId(res.data.channelId || '');
             } catch (err) {
                 console.error("Warning: Could not fetch recent videos", err);
             } finally {
@@ -143,7 +145,7 @@ export default function CreateTestPage() {
                                     <span className="material-symbols-outlined mr-1.5 text-[16px]">open_in_new</span>
                                     YouTube Studio
                                 </a>
-                                <a href="https://youtube.com/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center rounded-lg border border-transparent bg-red-50 dark:bg-red-900/20 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors">
+                                <a href={channelId ? `https://youtube.com/channel/${channelId}` : 'https://youtube.com/'} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center rounded-lg border border-transparent bg-red-50 dark:bg-red-900/20 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors">
                                     <span className="material-symbols-outlined mr-1.5 text-[16px]">play_circle</span>
                                     YouTube
                                 </a>

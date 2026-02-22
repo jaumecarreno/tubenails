@@ -159,6 +159,17 @@ app.get('/api/user/settings', async (req: Request, res: Response) => {
 
         const dbUser = userRes.rows[0];
 
+        // If YouTube is connected, try to fetch the channel ID
+        let channelId = '';
+        if (dbUser.yt_access_token) {
+            try {
+                const { channelId: cId } = await getChannelVideos(userId, 1);
+                channelId = cId;
+            } catch (e) {
+                // Non-critical: just won't have the channel link
+            }
+        }
+
         res.json({
             user: {
                 id: dbUser.id,
@@ -166,7 +177,8 @@ app.get('/api/user/settings', async (req: Request, res: Response) => {
                 plan: dbUser.stripe_plan || 'free',
                 createdAt: dbUser.created_at
             },
-            isYoutubeConnected: !!dbUser.yt_access_token
+            isYoutubeConnected: !!dbUser.yt_access_token,
+            channelId
         });
     } catch (error) {
         console.error('Error fetching user settings:', error);
@@ -257,8 +269,8 @@ app.get('/api/youtube/videos', async (req: Request, res: Response) => {
         const userRes = await pool.query('SELECT id FROM users WHERE id = $1 AND yt_access_token IS NOT NULL', [userId]);
         if (userRes.rowCount === 0) return res.status(404).json({ error: 'User not found or YouTube not connected' });
 
-        const videos = await getChannelVideos(userId, 12);
-        res.json(videos);
+        const { channelId, videos } = await getChannelVideos(userId, 12);
+        res.json({ channelId, videos });
     } catch (error: any) {
         console.error('Error fetching channel videos:', error);
         res.status(500).json({ error: 'Failed to fetch channel videos' });

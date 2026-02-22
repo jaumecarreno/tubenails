@@ -34,12 +34,13 @@ export async function getChannelVideos(userId: string, maxResults: number = 10) 
     });
 
     if (!channelRes.data.items || channelRes.data.items.length === 0) {
-        return [];
+        return { channelId: '', videos: [] };
     }
 
     const uploadsPlaylistId = channelRes.data.items[0].contentDetails?.relatedPlaylists?.uploads;
+    const channelId = channelRes.data.items[0].id || '';
     if (!uploadsPlaylistId) {
-        return [];
+        return { channelId, videos: [] };
     }
 
     // Step 2: Fetch the videos from the "Uploads" playlist (Cost: 1 API Unit)
@@ -50,15 +51,17 @@ export async function getChannelVideos(userId: string, maxResults: number = 10) 
     });
 
     if (!playlistRes.data.items) {
-        return [];
+        return { channelId, videos: [] };
     }
 
-    return playlistRes.data.items.map(item => ({
+    const videos = playlistRes.data.items.map(item => ({
         videoId: item.snippet?.resourceId?.videoId || '',
         title: item.snippet?.title || '',
         thumbnailUrl: item.snippet?.thumbnails?.high?.url || item.snippet?.thumbnails?.medium?.url || item.snippet?.thumbnails?.default?.url || '',
         publishedAt: item.snippet?.publishedAt || ''
     }));
+
+    return { channelId, videos };
 }
 
 export async function getVideoDetails(userId: string, videoId: string) {

@@ -113,9 +113,9 @@ export default function SettingsPage() {
                                             <span className="material-symbols-outlined mr-2 text-[18px]">open_in_new</span>
                                             YouTube Studio
                                         </a>
-                                        <a href="https://youtube.com/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center rounded-lg border border-transparent bg-transparent px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                                        <a href={userData?.channelId ? `https://youtube.com/channel/${userData.channelId}` : 'https://youtube.com/'} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center rounded-lg border border-transparent bg-transparent px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                                             <span className="material-symbols-outlined mr-2 text-[18px]">play_circle</span>
-                                            YouTube
+                                            Mi Canal
                                         </a>
                                     </div>
                                     <button
