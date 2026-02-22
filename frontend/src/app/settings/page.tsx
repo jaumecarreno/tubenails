@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import axios from '@/lib/axios';
 import Link from 'next/link';
+import { supabase } from '@/lib/supabase';
 
 export default function SettingsPage() {
     const [userData, setUserData] = useState<any>(null);
@@ -21,11 +22,17 @@ export default function SettingsPage() {
         fetchSettings();
     }, []);
 
-    const handleConnectYoutube = () => {
-        if (userData?.user?.id) {
-            window.location.href = `/api/auth/google?userId=${userData.user.id}`;
+    const handleConnectYoutube = async () => {
+        // Try getting user ID from API data first, then fall back to Supabase session
+        let userId = userData?.user?.id;
+        if (!userId) {
+            const { data: { session } } = await supabase.auth.getSession();
+            userId = session?.user?.id;
+        }
+        if (userId) {
+            window.location.href = `/api/auth/google?userId=${userId}`;
         } else {
-            alert('Error: No se pudo verificar la identidad del usuario');
+            alert('Error: No se pudo verificar la identidad del usuario. Intenta recargar la página.');
         }
     };
 
