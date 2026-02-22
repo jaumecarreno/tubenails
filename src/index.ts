@@ -80,8 +80,18 @@ app.use(async (req, res, next) => {
             `INSERT INTO users (id, email) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING`,
             [user.id, user.email]
         );
-    } catch (e) {
-        console.error('Error auto-creating user via middleware:', e);
+    } catch (e: any) {
+        if (e.code === '23505' && e.constraint === 'users_email_key') {
+            // Email exists under a legacy user ID — merge: delete old row, insert fresh one
+            console.log(`[Auth Middleware] Merging legacy user for email ${user.email}`);
+            await pool.query(`DELETE FROM users WHERE email = $1 AND id != $2`, [user.email, user.id]);
+            await pool.query(
+                `INSERT INTO users (id, email) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING`,
+                [user.id, user.email]
+            );
+        } else {
+            console.error('Error auto-creating user via middleware:', e);
+        }
     }
 
     next();

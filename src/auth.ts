@@ -40,15 +40,20 @@ export async function handleGoogleCallback(code: string, userId?: string) {
     const client = await pool.connect();
     try {
         if (userId) {
-            // Securely link tokens to the logged-in user via state passing
-            await client.query(
-                `INSERT INTO Users (id, email, yt_access_token, yt_refresh_token) 
-                 VALUES ($1, $2, $3, $4) 
-                 ON CONFLICT (id) DO UPDATE 
-                 SET yt_access_token = EXCLUDED.yt_access_token, 
-                     yt_refresh_token = COALESCE(EXCLUDED.yt_refresh_token, Users.yt_refresh_token)`,
-                [userId, email, tokens.access_token, tokens.refresh_token]
+            // Try UPDATE first (works if middleware already created the row)
+            const updateRes = await client.query(
+                `UPDATE Users SET yt_access_token = $1, yt_refresh_token = COALESCE($2, yt_refresh_token) WHERE id = $3`,
+                [tokens.access_token, tokens.refresh_token, userId]
             );
+
+            if (updateRes.rowCount === 0) {
+                // User row doesn't exist yet - delete any legacy row with same email and create fresh
+                await client.query(`DELETE FROM Users WHERE email = $1 AND id != $2`, [email, userId]);
+                await client.query(
+                    `INSERT INTO Users (id, email, yt_access_token, yt_refresh_token) VALUES ($1, $2, $3, $4)`,
+                    [userId, email, tokens.access_token, tokens.refresh_token]
+                );
+            }
             return userId;
         } else {
             // Fallback for legacy flows without state (not recommended)
