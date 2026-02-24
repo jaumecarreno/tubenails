@@ -160,6 +160,37 @@ export interface DecisionSummary {
     reason: string;
 }
 
+export interface CurrentInternalState {
+    variant: TestVariant;
+    title: string;
+    thumbnailUrl: string;
+    since: string;
+    sinceSource: 'exact' | 'inferred';
+}
+
+export interface VariantHistoryEvent {
+    id: string;
+    changedAt: string;
+    variant: TestVariant;
+    source: 'test_created' | 'daily_rotation' | 'auto_winner' | 'manual_winner' | 'inconclusive_revert';
+    changedByUserId: string | null;
+}
+
+export interface DailyVariantResult {
+    date: string;
+    variant: TestVariant;
+    source: 'exact' | 'inferred';
+    title: string;
+    thumbnailUrl: string;
+    impressions: number;
+    clicks: number;
+    views: number;
+    estimated_minutes_watched: number;
+    average_view_duration_seconds: number;
+    impressions_ctr: number;
+    ctr: number;
+}
+
 export interface TestResultsResponse {
     test: TestRecord;
     dailyResults: TestDailyResult[];
@@ -169,5 +200,8 @@ export interface TestResultsResponse {
         a: VariantStats;
         b: VariantStats;
     };
+    currentInternalState: CurrentInternalState;
+    variantHistory: VariantHistoryEvent[];
+    dailyVariantResults: DailyVariantResult[];
     decision: DecisionSummary;
 }

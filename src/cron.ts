@@ -1,4 +1,5 @@
 import cron from 'node-cron';
+import { PoolClient } from 'pg';
 import { pool } from './db';
 import { getDailyAnalytics, updateVideoThumbnail, updateVideoTitle } from './youtube';
 import {
@@ -9,6 +10,7 @@ import {
     ScoreWeights,
     VariantId
 } from './metrics';
+import { VariantEventSource } from './test-history';
 
 function getErrorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
@@ -100,6 +102,25 @@ async function persistDailyAnalyticsForDate(
             analyticsPoint.averageViewDurationSeconds,
             analyticsPoint.metricVersion
         ]
+    );
+}
+
+async function insertTestVariantEvent(
+    client: PoolClient,
+    testId: string,
+    variant: VariantId,
+    source: VariantEventSource
+) {
+    await client.query(
+        `
+        INSERT INTO test_variant_events (
+            test_id,
+            variant,
+            source
+        )
+        VALUES ($1, $2, $3)
+    `,
+        [testId, variant, source]
     );
 }
 
@@ -206,6 +227,7 @@ export function startCronJobs() {
                                     id
                                 ]
                             );
+                            await insertTestVariantEvent(client, id, oldWinnerVariant, 'auto_winner');
                             continue;
                         }
 
@@ -246,6 +268,7 @@ export function startCronJobs() {
                                     id
                                 ]
                             );
+                            await insertTestVariantEvent(client, id, decision.winnerVariant, 'auto_winner');
                         } else {
                             let finalCurrentVariant = currentVariant as VariantId;
                             if (revertToControlOnInconclusive) {
@@ -279,6 +302,10 @@ export function startCronJobs() {
                                     id
                                 ]
                             );
+
+                            if (revertToControlOnInconclusive) {
+                                await insertTestVariantEvent(client, id, finalCurrentVariant, 'inconclusive_revert');
+                            }
                         }
                     } else {
                         const nextVariant: VariantId = currentVariant === 'A' ? 'B' : 'A';
@@ -287,6 +314,7 @@ export function startCronJobs() {
                         await updateVideoTitle(userId, videoId, nextAssets.title);
                         await updateVideoThumbnail(userId, videoId, nextAssets.thumbnail);
                         await client.query('UPDATE tests SET current_variant = $1 WHERE id = $2', [nextVariant, id]);
+                        await insertTestVariantEvent(client, id, nextVariant, 'daily_rotation');
                     }
 
                     // Space requests to reduce YouTube API rate-limit pressure.

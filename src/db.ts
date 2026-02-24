@@ -69,6 +69,15 @@ export async function setupDatabase() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
+      CREATE TABLE IF NOT EXISTS Test_Variant_Events (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        test_id UUID REFERENCES Tests(id) ON DELETE CASCADE,
+        variant CHAR(1) NOT NULL,
+        source VARCHAR(32) NOT NULL,
+        changed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        changed_by_user_id UUID REFERENCES Users(id) ON DELETE SET NULL
+      );
+
       CREATE TABLE IF NOT EXISTS Daily_Results (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         test_id UUID REFERENCES Tests(id) ON DELETE CASCADE,
@@ -96,6 +105,11 @@ export async function setupDatabase() {
       ALTER TABLE tests
       ADD COLUMN IF NOT EXISTS workspace_id UUID,
       ADD COLUMN IF NOT EXISTS created_by_user_id UUID
+    `);
+
+        await client.query(`
+      ALTER TABLE test_variant_events
+      ADD COLUMN IF NOT EXISTS changed_by_user_id UUID
     `);
 
         await client.query(`
@@ -175,6 +189,63 @@ export async function setupDatabase() {
         await client.query(`
       CREATE INDEX IF NOT EXISTS idx_workspace_invites_workspace_status
       ON workspace_invites(workspace_id, status)
+    `);
+
+        await client.query(`
+      ALTER TABLE test_variant_events
+      DROP CONSTRAINT IF EXISTS test_variant_events_test_id_fkey
+    `);
+        await client.query(`
+      ALTER TABLE test_variant_events
+      ADD CONSTRAINT test_variant_events_test_id_fkey
+      FOREIGN KEY (test_id) REFERENCES tests(id) ON DELETE CASCADE
+    `);
+        await client.query(`
+      ALTER TABLE test_variant_events
+      DROP CONSTRAINT IF EXISTS test_variant_events_changed_by_user_id_fkey
+    `);
+        await client.query(`
+      ALTER TABLE test_variant_events
+      ADD CONSTRAINT test_variant_events_changed_by_user_id_fkey
+      FOREIGN KEY (changed_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+    `);
+        await client.query(`
+      ALTER TABLE test_variant_events
+      DROP CONSTRAINT IF EXISTS test_variant_events_variant_check
+    `);
+        await client.query(`
+      ALTER TABLE test_variant_events
+      ADD CONSTRAINT test_variant_events_variant_check CHECK (variant IN ('A', 'B'))
+    `);
+        await client.query(`
+      ALTER TABLE test_variant_events
+      DROP CONSTRAINT IF EXISTS test_variant_events_source_check
+    `);
+        await client.query(`
+      ALTER TABLE test_variant_events
+      ADD CONSTRAINT test_variant_events_source_check CHECK (
+        source IN ('test_created', 'daily_rotation', 'auto_winner', 'manual_winner', 'inconclusive_revert')
+      )
+    `);
+        await client.query(`
+      ALTER TABLE test_variant_events
+      ALTER COLUMN test_id SET NOT NULL
+    `);
+        await client.query(`
+      ALTER TABLE test_variant_events
+      ALTER COLUMN variant SET NOT NULL
+    `);
+        await client.query(`
+      ALTER TABLE test_variant_events
+      ALTER COLUMN source SET NOT NULL
+    `);
+        await client.query(`
+      ALTER TABLE test_variant_events
+      ALTER COLUMN changed_at SET NOT NULL
+    `);
+        await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_test_variant_events_test_changed_at
+      ON test_variant_events(test_id, changed_at DESC)
     `);
 
         await client.query(`

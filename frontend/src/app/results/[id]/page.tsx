@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import axios from '@/lib/axios';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { TestResultsResponse, TestVariant, VariantStats } from '@/lib/api-types';
+import { TestResultsResponse, TestVariant, VariantStats, VideoDetailsResponse } from '@/lib/api-types';
 import { useI18n } from '@/components/LanguageProvider';
 
 type Translator = (key: string, variables?: Record<string, string | number>) => string;
@@ -31,6 +31,32 @@ function formatNumber(value: number, locale: string, decimals: number = 0): stri
     return safe.toLocaleString(locale, {
         minimumFractionDigits: decimals,
         maximumFractionDigits: decimals
+    });
+}
+
+function formatDateTime(value: string, locale: string): string {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+        return value;
+    }
+    return date.toLocaleString(locale, {
+        year: 'numeric',
+        month: 'short',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
+
+function formatDate(value: string, locale: string): string {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+        return value;
+    }
+    return date.toLocaleDateString(locale, {
+        year: 'numeric',
+        month: 'short',
+        day: '2-digit'
     });
 }
 
@@ -74,6 +100,12 @@ function getReasonLabel(reason: string, t: Translator): string {
             return translated === key ? token : translated;
         })
         .join(', ');
+}
+
+function getHistorySourceLabel(source: string, t: Translator): string {
+    const key = `results.history.source.${source}`;
+    const translated = t(key);
+    return translated === key ? source : translated;
 }
 
 function getApiErrorMessage(error: unknown, t: Translator): string {
@@ -173,6 +205,9 @@ export default function ResultsPage() {
     const [loading, setLoading] = useState(true);
     const [syncing, setSyncing] = useState(false);
     const [applyingVariant, setApplyingVariant] = useState<TestVariant | null>(null);
+    const [liveState, setLiveState] = useState<VideoDetailsResponse | null>(null);
+    const [liveStateLoading, setLiveStateLoading] = useState(false);
+    const [liveStateError, setLiveStateError] = useState<string | null>(null);
 
     const loadResults = async (testId: string) => {
         const response = await axios.get<TestResultsResponse>(`/api/tests/${testId}/results`);
@@ -212,10 +247,32 @@ export default function ResultsPage() {
         }
     };
 
+    const handleCheckLiveState = async () => {
+        if (!testData || liveStateLoading) {
+            return;
+        }
+
+        setLiveStateLoading(true);
+        setLiveStateError(null);
+        try {
+            const response = await axios.get<VideoDetailsResponse>(`/api/youtube/video/${testData.test.video_id}`);
+            setLiveState(response.data);
+        } catch (error) {
+            console.error('Live YouTube state check failed', error);
+            setLiveState(null);
+            setLiveStateError(getApiErrorMessage(error, t));
+        } finally {
+            setLiveStateLoading(false);
+        }
+    };
+
     useEffect(() => {
         if (!id) {
             return;
         }
+
+        setLiveState(null);
+        setLiveStateError(null);
 
         const fetchResults = async () => {
             try {
@@ -276,6 +333,16 @@ export default function ResultsPage() {
     const scoreDelta = Math.abs(statsA.score - statsB.score);
     const ctrDelta = Math.abs(statsA.ctr - statsB.ctr);
     const confidenceLevel = getConfidenceLevel(decision.confidence ?? 0, t);
+    const internalState = testData.currentInternalState;
+    const historyEvents = testData.variantHistory;
+    const dailyVariantResults = testData.dailyVariantResults;
+    const sourceLabel = t(`results.stateSource.${internalState.sinceSource}`);
+    const resolvedSourceLabel = sourceLabel.startsWith('results.stateSource')
+        ? internalState.sinceSource
+        : sourceLabel;
+    const liveStateMatches = liveState
+        ? liveState.title.trim() === internalState.title.trim()
+        : null;
 
     return (
         <div className="flex-1 w-full max-w-[1200px] mx-auto px-6 py-8 pb-20 overflow-y-auto">
@@ -415,6 +482,158 @@ export default function ResultsPage() {
                         t={t}
                     />
                 </article>
+            </section>
+
+            <section className="mt-8">
+                <details className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-surface-dark">
+                    <summary className="cursor-pointer list-none px-5 py-4 flex items-center justify-between">
+                        <span className="font-semibold text-slate-900 dark:text-white">{t('results.rotationDiagnostics')}</span>
+                        <span className="material-symbols-outlined text-slate-500">expand_more</span>
+                    </summary>
+
+                    <div className="border-t border-slate-200 dark:border-slate-700 px-5 py-5 space-y-6">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            <article className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-background-dark/40 p-4 space-y-3">
+                                <h4 className="font-semibold text-slate-900 dark:text-white">{t('results.currentExpectedState')}</h4>
+                                <div className="flex flex-wrap items-center gap-2 text-sm">
+                                    <span className="inline-flex items-center gap-1 rounded-full border border-slate-300 dark:border-slate-600 px-2 py-0.5">
+                                        {t('results.currentVariant')}: {internalState.variant}
+                                    </span>
+                                    <span className="inline-flex items-center gap-1 rounded-full border border-slate-300 dark:border-slate-600 px-2 py-0.5">
+                                        {t('results.stateSource')}: {resolvedSourceLabel}
+                                    </span>
+                                </div>
+                                <p className="text-sm text-slate-600 dark:text-slate-300">
+                                    {t('results.lastChange')}: {formatDateTime(internalState.since, locale)}
+                                </p>
+                                <p className="text-sm font-medium text-slate-900 dark:text-white break-words">{internalState.title}</p>
+                                <div className="aspect-video rounded-md overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-900">
+                                    <img
+                                        src={internalState.thumbnailUrl}
+                                        alt={internalState.title}
+                                        className="h-full w-full object-cover"
+                                    />
+                                </div>
+                            </article>
+
+                            <article className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-background-dark/40 p-4 space-y-3">
+                                <div className="flex items-center justify-between gap-3">
+                                    <h4 className="font-semibold text-slate-900 dark:text-white">{t('results.youtubeLiveState')}</h4>
+                                    <button
+                                        type="button"
+                                        onClick={() => { void handleCheckLiveState(); }}
+                                        disabled={liveStateLoading}
+                                        className="inline-flex items-center gap-1 rounded-md border border-slate-300 dark:border-slate-600 px-2.5 py-1 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:border-primary hover:text-primary disabled:opacity-50"
+                                    >
+                                        <span className={`material-symbols-outlined text-base ${liveStateLoading ? 'animate-spin' : ''}`}>sync</span>
+                                        {liveStateLoading ? t('results.checkingLiveState') : t('results.checkLiveState')}
+                                    </button>
+                                </div>
+
+                                {liveStateError && (
+                                    <p className="text-sm text-rose-500">
+                                        {t('results.liveStateUnavailable')} {liveStateError}
+                                    </p>
+                                )}
+
+                                {liveState && (
+                                    <>
+                                        <p className="text-sm text-slate-600 dark:text-slate-300">
+                                            {t('results.liveTitle')}: <span className="font-medium text-slate-900 dark:text-white">{liveState.title}</span>
+                                        </p>
+                                        <div className="aspect-video rounded-md overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-900">
+                                            <img
+                                                src={liveState.thumbnailUrl}
+                                                alt={liveState.title}
+                                                className="h-full w-full object-cover"
+                                            />
+                                        </div>
+                                        <p className={`text-sm font-medium ${liveStateMatches ? 'text-emerald-500' : 'text-amber-500'}`}>
+                                            {t('results.liveComparison')}: {liveStateMatches
+                                                ? t('results.liveComparison.match')
+                                                : t('results.liveComparison.mismatch')}
+                                        </p>
+                                    </>
+                                )}
+                            </article>
+                        </div>
+
+                        <article className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-background-dark/40 p-4">
+                            <h4 className="font-semibold text-slate-900 dark:text-white mb-3">{t('results.variantHistory')}</h4>
+                            {historyEvents.length === 0 ? (
+                                <p className="text-sm text-slate-500">{t('results.history.none')}</p>
+                            ) : (
+                                <ul className="space-y-2">
+                                    {historyEvents.map((eventRow) => (
+                                        <li key={eventRow.id} className="rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-surface-dark px-3 py-2 text-sm">
+                                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                                <span className="font-medium text-slate-900 dark:text-white">
+                                                    {formatDateTime(eventRow.changedAt, locale)}
+                                                </span>
+                                                <span className="inline-flex items-center gap-1 rounded-full border border-slate-300 dark:border-slate-600 px-2 py-0.5 text-xs">
+                                                    {t('results.currentVariant')}: {eventRow.variant}
+                                                </span>
+                                            </div>
+                                            <p className="text-slate-600 dark:text-slate-300 mt-1">
+                                                {getHistorySourceLabel(eventRow.source, t)}
+                                            </p>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </article>
+
+                        <article className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-background-dark/40 p-4">
+                            <h4 className="font-semibold text-slate-900 dark:text-white mb-3">{t('results.dailyResultsTimeline')}</h4>
+                            {dailyVariantResults.length === 0 ? (
+                                <p className="text-sm text-slate-500">{t('results.table.noRows')}</p>
+                            ) : (
+                                <div className="overflow-x-auto">
+                                    <table className="min-w-full text-sm">
+                                        <thead>
+                                            <tr className="text-left text-slate-500 border-b border-slate-200 dark:border-slate-700">
+                                                <th className="py-2 pr-3">{t('results.table.date')}</th>
+                                                <th className="py-2 pr-3">{t('results.table.variant')}</th>
+                                                <th className="py-2 pr-3">{t('results.table.source')}</th>
+                                                <th className="py-2 pr-3">{t('results.table.title')}</th>
+                                                <th className="py-2 pr-3">{t('results.table.thumbnail')}</th>
+                                                <th className="py-2 pr-3">{t('results.table.impressions')}</th>
+                                                <th className="py-2 pr-3">{t('results.table.ctr')}</th>
+                                                <th className="py-2 pr-3">{t('results.table.estimatedClicks')}</th>
+                                                <th className="py-2 pr-3">{t('results.table.views')}</th>
+                                                <th className="py-2 pr-3">{t('results.table.watchMinutes')}</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {dailyVariantResults.map((row) => (
+                                                <tr key={row.date} className="border-b border-slate-100 dark:border-slate-800 align-top">
+                                                    <td className="py-2 pr-3 whitespace-nowrap">{formatDate(row.date, locale)}</td>
+                                                    <td className="py-2 pr-3 whitespace-nowrap">{row.variant}</td>
+                                                    <td className="py-2 pr-3 whitespace-nowrap">
+                                                        {row.source === 'exact' ? t('results.stateSource.exact') : t('results.stateSource.inferred')}
+                                                    </td>
+                                                    <td className="py-2 pr-3 min-w-[220px] text-slate-700 dark:text-slate-200">{row.title}</td>
+                                                    <td className="py-2 pr-3">
+                                                        <img
+                                                            src={row.thumbnailUrl}
+                                                            alt={row.title}
+                                                            className="h-12 w-20 rounded object-cover border border-slate-200 dark:border-slate-700"
+                                                        />
+                                                    </td>
+                                                    <td className="py-2 pr-3 whitespace-nowrap">{formatNumber(row.impressions, locale)}</td>
+                                                    <td className="py-2 pr-3 whitespace-nowrap">{formatPercent(row.ctr, locale, 3)}</td>
+                                                    <td className="py-2 pr-3 whitespace-nowrap">{formatNumber(row.clicks, locale)}</td>
+                                                    <td className="py-2 pr-3 whitespace-nowrap">{formatNumber(row.views, locale)}</td>
+                                                    <td className="py-2 pr-3 whitespace-nowrap">{formatNumber(row.estimated_minutes_watched, locale, 2)}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </article>
+                    </div>
+                </details>
             </section>
         </div>
     );

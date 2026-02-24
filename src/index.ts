@@ -44,6 +44,13 @@ import {
     planSupportsCollaboration,
     WorkspaceRole
 } from './team';
+import {
+    buildDailyVariantResults,
+    getCurrentInternalState,
+    isVariantEventSource,
+    TestVariantEventRecord,
+    VariantEventSource
+} from './test-history';
 
 dotenv.config();
 
@@ -395,6 +402,14 @@ interface AccessibleTestRecord {
     review_required: boolean | null;
 }
 
+interface TestVariantEventRow {
+    id: string;
+    variant: string;
+    source: string;
+    changed_at: string;
+    changed_by_user_id: string | null;
+}
+
 async function getAccessibleTestForUser(testId: string, userId: string): Promise<AccessibleTestRecord | null> {
     const testRes = await pool.query<AccessibleTestRecord>(
         `
@@ -506,6 +521,26 @@ function buildManualVariantAssets(
     return variant === 'A'
         ? { title: titleA, thumbnail: thumbnailA }
         : { title: titleB, thumbnail: thumbnailB };
+}
+
+async function insertTestVariantEvent(
+    testId: string,
+    variant: VariantId,
+    source: VariantEventSource,
+    changedByUserId: string | null
+) {
+    await pool.query(
+        `
+        INSERT INTO test_variant_events (
+            test_id,
+            variant,
+            source,
+            changed_by_user_id
+        )
+        VALUES ($1, $2, $3, $4)
+    `,
+        [testId, variant, source, changedByUserId]
+    );
 }
 
 export const app = express();
@@ -1256,38 +1291,66 @@ app.post('/api/tests', async (req: Request, res: Response) => {
         const payload = createTestSchema.parse(req.body);
         const user = getAuthenticatedUser(req);
         const context = await getWorkspaceContextForUser(user.id);
+        const client = await pool.connect();
 
-        const result = await pool.query(
-            `
-            INSERT INTO tests (
-                user_id,
-                workspace_id,
-                created_by_user_id,
-                video_id,
-                title_a,
-                title_b,
-                thumbnail_url_a,
-                thumbnail_url_b,
-                duration_days,
-                start_date
-            )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
-            RETURNING *
-        `,
-            [
-                context.ownerUserId,
-                context.workspaceId,
-                user.id,
-                payload.videoId,
-                payload.titleA,
-                payload.titleB,
-                payload.thumbnailA,
-                payload.thumbnailB,
-                payload.durationDays
-            ]
-        );
+        try {
+            await client.query('BEGIN');
+            const result = await client.query(
+                `
+                INSERT INTO tests (
+                    user_id,
+                    workspace_id,
+                    created_by_user_id,
+                    video_id,
+                    title_a,
+                    title_b,
+                    thumbnail_url_a,
+                    thumbnail_url_b,
+                    duration_days,
+                    start_date
+                )
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+                RETURNING *
+            `,
+                [
+                    context.ownerUserId,
+                    context.workspaceId,
+                    user.id,
+                    payload.videoId,
+                    payload.titleA,
+                    payload.titleB,
+                    payload.thumbnailA,
+                    payload.thumbnailB,
+                    payload.durationDays
+                ]
+            );
 
-        return res.json(result.rows[0]);
+            const createdTestId = result.rows[0]?.id as string | undefined;
+            if (!createdTestId) {
+                throw new Error('Test creation failed');
+            }
+
+            await client.query(
+                `
+                INSERT INTO test_variant_events (
+                    test_id,
+                    variant,
+                    source,
+                    changed_by_user_id
+                )
+                VALUES ($1, 'A', 'test_created', $2)
+            `,
+                [createdTestId, user.id]
+            );
+
+            await client.query('COMMIT');
+            return res.json(result.rows[0]);
+        } catch (dbError) {
+            await client.query('ROLLBACK');
+            throw dbError;
+        } finally {
+            client.release();
+        }
     } catch (error) {
         if (error instanceof ZodError) {
             return res.status(400).json({
@@ -1333,6 +1396,35 @@ app.get('/api/tests/:id/results', async (req: Request, res: Response) => {
         );
 
         const dailyResults = resultsRes.rows;
+        const eventsRes = await pool.query<TestVariantEventRow>(
+            `
+            SELECT
+                id,
+                variant,
+                source,
+                changed_at,
+                changed_by_user_id
+            FROM test_variant_events
+            WHERE test_id = $1
+            ORDER BY changed_at DESC
+        `,
+            [testId]
+        );
+
+        const variantEvents: TestVariantEventRecord[] = eventsRes.rows.flatMap((eventRow) => {
+            const variant = toVariantId(eventRow.variant);
+            if (!variant || !isVariantEventSource(eventRow.source)) {
+                return [];
+            }
+            return [{
+                id: eventRow.id,
+                variant,
+                source: eventRow.source,
+                changed_at: eventRow.changed_at,
+                changed_by_user_id: eventRow.changed_by_user_id
+            }];
+        });
+
         const performance = computeVariantPerformance(dailyResults, test.start_date, scoringConfig.weights);
         const computedDecision = evaluateWinnerDecision(
             performance,
@@ -1340,6 +1432,9 @@ app.get('/api/tests/:id/results', async (req: Request, res: Response) => {
             scoringConfig,
             test.status === 'finished'
         );
+
+        const currentInternalState = getCurrentInternalState(test, variantEvents);
+        const dailyVariantResults = buildDailyVariantResults(test, dailyResults, variantEvents);
 
         const winnerVariant = toVariantId(test.winner_variant) ?? computedDecision.winnerVariant;
         const winnerMode = (test.winner_mode as string | null) ?? computedDecision.winnerMode;
@@ -1364,6 +1459,15 @@ app.get('/api/tests/:id/results', async (req: Request, res: Response) => {
                 a: performance.a,
                 b: performance.b
             },
+            currentInternalState,
+            variantHistory: variantEvents.map((eventRow) => ({
+                id: eventRow.id,
+                changedAt: new Date(eventRow.changed_at).toISOString(),
+                variant: eventRow.variant,
+                source: eventRow.source,
+                changedByUserId: eventRow.changed_by_user_id
+            })),
+            dailyVariantResults,
             decision: {
                 winnerVariant,
                 winnerMode,
@@ -1448,6 +1552,8 @@ app.post('/api/tests/:id/apply-winner', async (req: Request, res: Response) => {
         `,
             [variant, performance.a.score, performance.b.score, testId]
         );
+
+        await insertTestVariantEvent(testId, variant, 'manual_winner', user.id);
 
         return res.json({ success: true, test: updateRes.rows[0] });
     } catch (error) {
