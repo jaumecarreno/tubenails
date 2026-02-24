@@ -392,6 +392,7 @@ interface AccessibleTestRecord {
     start_date: string;
     duration_days: number;
     status: string;
+    initial_variant: VariantId;
     current_variant: VariantId;
     winner_variant: VariantId | null;
     winner_mode: string | null;
@@ -521,6 +522,10 @@ function buildManualVariantAssets(
     return variant === 'A'
         ? { title: titleA, thumbnail: thumbnailA }
         : { title: titleB, thumbnail: thumbnailB };
+}
+
+function shouldStartWithNewVariantFirst(durationDays: number): boolean {
+    return durationDays === 4 || durationDays === 7 || durationDays === 14;
 }
 
 async function insertTestVariantEvent(
@@ -1122,7 +1127,7 @@ app.get('/api/dashboard', async (req: Request, res: Response) => {
 
         const finishedAllRes = await pool.query(
             `
-            SELECT id, start_date, winner_variant, winner_mode, review_required
+            SELECT id, start_date, initial_variant, winner_variant, winner_mode, review_required
             FROM tests
             WHERE workspace_id = $1 AND status = 'finished'
         `,
@@ -1291,6 +1296,20 @@ app.post('/api/tests', async (req: Request, res: Response) => {
         const payload = createTestSchema.parse(req.body);
         const user = getAuthenticatedUser(req);
         const context = await getWorkspaceContextForUser(user.id);
+        const initialVariant: VariantId = shouldStartWithNewVariantFirst(payload.durationDays) ? 'B' : 'A';
+        const initialAssets = buildManualVariantAssets(
+            initialVariant,
+            payload.titleA,
+            payload.titleB,
+            payload.thumbnailA,
+            payload.thumbnailB
+        );
+
+        if (initialVariant === 'B') {
+            await updateVideoTitle(context.ownerUserId, payload.videoId, initialAssets.title);
+            await updateVideoThumbnail(context.ownerUserId, payload.videoId, initialAssets.thumbnail);
+        }
+
         const client = await pool.connect();
 
         try {
@@ -1307,9 +1326,11 @@ app.post('/api/tests', async (req: Request, res: Response) => {
                     thumbnail_url_a,
                     thumbnail_url_b,
                     duration_days,
+                    initial_variant,
+                    current_variant,
                     start_date
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
                 RETURNING *
             `,
                 [
@@ -1321,7 +1342,9 @@ app.post('/api/tests', async (req: Request, res: Response) => {
                     payload.titleB,
                     payload.thumbnailA,
                     payload.thumbnailB,
-                    payload.durationDays
+                    payload.durationDays,
+                    initialVariant,
+                    initialVariant
                 ]
             );
 
@@ -1338,9 +1361,9 @@ app.post('/api/tests', async (req: Request, res: Response) => {
                     source,
                     changed_by_user_id
                 )
-                VALUES ($1, 'A', 'test_created', $2)
+                VALUES ($1, $2, 'test_created', $3)
             `,
-                [createdTestId, user.id]
+                [createdTestId, initialVariant, user.id]
             );
 
             await client.query('COMMIT');
@@ -1425,7 +1448,12 @@ app.get('/api/tests/:id/results', async (req: Request, res: Response) => {
             }];
         });
 
-        const performance = computeVariantPerformance(dailyResults, test.start_date, scoringConfig.weights);
+        const performance = computeVariantPerformance(
+            dailyResults,
+            test.start_date,
+            scoringConfig.weights,
+            test.initial_variant
+        );
         const computedDecision = evaluateWinnerDecision(
             performance,
             test.duration_days,
@@ -1531,7 +1559,12 @@ app.post('/api/tests/:id/apply-winner', async (req: Request, res: Response) => {
         `,
             [testId]
         );
-        const performance = computeVariantPerformance(resultsRes.rows, test.start_date, scoringConfig.weights);
+        const performance = computeVariantPerformance(
+            resultsRes.rows,
+            test.start_date,
+            scoringConfig.weights,
+            test.initial_variant
+        );
 
         const updateRes = await pool.query(
             `

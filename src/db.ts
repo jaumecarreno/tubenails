@@ -65,6 +65,7 @@ export async function setupDatabase() {
         start_date TIMESTAMP NOT NULL,
         duration_days INT NOT NULL,
         status VARCHAR(50) DEFAULT 'active',
+        initial_variant VARCHAR(1) DEFAULT 'A',
         current_variant VARCHAR(1) DEFAULT 'A',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
@@ -104,7 +105,8 @@ export async function setupDatabase() {
         await client.query(`
       ALTER TABLE tests
       ADD COLUMN IF NOT EXISTS workspace_id UUID,
-      ADD COLUMN IF NOT EXISTS created_by_user_id UUID
+      ADD COLUMN IF NOT EXISTS created_by_user_id UUID,
+      ADD COLUMN IF NOT EXISTS initial_variant VARCHAR(1)
     `);
 
         await client.query(`
@@ -313,6 +315,27 @@ export async function setupDatabase() {
         await client.query(`
       ALTER TABLE tests
       ALTER COLUMN created_by_user_id SET NOT NULL
+    `);
+        await client.query(`
+      UPDATE tests
+      SET initial_variant = 'A'
+      WHERE initial_variant IS NULL
+    `);
+        await client.query(`
+      ALTER TABLE tests
+      ALTER COLUMN initial_variant SET DEFAULT 'A'
+    `);
+        await client.query(`
+      ALTER TABLE tests
+      ALTER COLUMN initial_variant SET NOT NULL
+    `);
+        await client.query(`
+      ALTER TABLE tests
+      DROP CONSTRAINT IF EXISTS tests_initial_variant_check
+    `);
+        await client.query(`
+      ALTER TABLE tests
+      ADD CONSTRAINT tests_initial_variant_check CHECK (initial_variant IN ('A','B'))
     `);
 
         await client.query(`

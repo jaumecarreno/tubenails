@@ -35,6 +35,23 @@ describe('metrics helpers', () => {
         expect(split.b.ctr).toBe(10);
     });
 
+    it('supports starting in variant B for day parity split', () => {
+        const split = splitDailyResultsByVariant(
+            [
+                { date: '2026-01-01', impressions: 100, clicks: 10 },
+                { date: '2026-01-02', impressions: 120, clicks: 12 },
+                { date: '2026-01-03', impressions: 80, clicks: 8 }
+            ],
+            '2026-01-01',
+            'B'
+        );
+
+        expect(split.a.impressions).toBe(120);
+        expect(split.a.clicks).toBe(12);
+        expect(split.b.impressions).toBe(180);
+        expect(split.b.clicks).toBe(18);
+    });
+
     it('summarizes finished-test lift and extra clicks', () => {
         const summary = summarizeFinishedTestMetrics(
             [

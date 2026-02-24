@@ -21,6 +21,7 @@ export interface TestVariantEventRecord {
 
 export interface TestHistoryTestRecord {
     start_date: string | Date;
+    initial_variant: VariantId;
     current_variant: VariantId;
     title_a: string;
     title_b: string;
@@ -80,9 +81,12 @@ function toIsoDateKey(input: string | Date): string {
     return normalizeUtcDate(input).toISOString().slice(0, 10);
 }
 
-function inferVariantForDate(day: string | Date, startDate: string | Date): VariantId {
+function inferVariantForDate(day: string | Date, startDate: string | Date, startVariant: VariantId): VariantId {
     const diffDays = Math.floor((normalizeUtcDate(day).getTime() - normalizeUtcDate(startDate).getTime()) / DAY_MS);
-    return diffDays % 2 === 0 ? 'A' : 'B';
+    if (diffDays % 2 === 0) {
+        return startVariant;
+    }
+    return startVariant === 'A' ? 'B' : 'A';
 }
 
 function assetsForVariant(test: TestHistoryTestRecord, variant: VariantId): { title: string; thumbnailUrl: string } {
@@ -145,7 +149,7 @@ export function buildDailyVariantResults(
             eventIndex += 1;
         }
 
-        const variant = activeEvent?.variant ?? inferVariantForDate(row.date, test.start_date);
+        const variant = activeEvent?.variant ?? inferVariantForDate(row.date, test.start_date, test.initial_variant);
         const source: DailyVariantSource = activeEvent ? 'exact' : 'inferred';
         const assets = assetsForVariant(test, variant);
         const impressions = toSafeNumber(row.impressions);

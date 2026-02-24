@@ -74,6 +74,7 @@ export interface WinnerDecision {
 interface FinishedTestSummaryInput {
     id: string;
     start_date: string | Date;
+    initial_variant?: VariantId | null;
     winner_variant?: VariantId | null;
     winner_mode?: string | null;
     review_required?: boolean | null;
@@ -180,9 +181,16 @@ function emptyVariantPerformance(variant: VariantId): VariantPerformance {
     };
 }
 
-function isRowVariantA(rowDate: Date, normalizedStartDate: Date): boolean {
+function variantForDiffDays(diffDays: number, startVariant: VariantId): VariantId {
+    if (diffDays % 2 === 0) {
+        return startVariant;
+    }
+    return startVariant === 'A' ? 'B' : 'A';
+}
+
+function isRowVariantA(rowDate: Date, normalizedStartDate: Date, startVariant: VariantId): boolean {
     const diffDays = Math.floor((rowDate.getTime() - normalizedStartDate.getTime()) / DAY_MS);
-    return diffDays % 2 === 0;
+    return variantForDiffDays(diffDays, startVariant) === 'A';
 }
 
 export function computeEstimatedClicks(impressions: number, ctrPercent: number): number {
@@ -193,7 +201,8 @@ export function computeEstimatedClicks(impressions: number, ctrPercent: number):
 
 export function splitDailyResultsByVariant(
     dailyResults: DailyResultPoint[],
-    startDate: string | Date
+    startDate: string | Date,
+    startVariant: VariantId = 'A'
 ): SplitVariantTotals {
     const normalizedStartDate = normalizeUtcDate(startDate);
     const totals = {
@@ -210,7 +219,7 @@ export function splitDailyResultsByVariant(
 
         const impressions = safeNumber(row.impressions);
         const clicks = safeNumber(row.clicks);
-        const bucket = diffDays % 2 === 0 ? totals.a : totals.b;
+        const bucket = variantForDiffDays(diffDays, startVariant) === 'A' ? totals.a : totals.b;
 
         bucket.impressions += impressions;
         bucket.clicks += clicks;
@@ -224,7 +233,8 @@ export function splitDailyResultsByVariant(
 export function computeVariantPerformance(
     dailyResults: DailyResultPoint[],
     startDate: string | Date,
-    weights: ScoreWeights
+    weights: ScoreWeights,
+    startVariant: VariantId = 'A'
 ): SplitVariantPerformance {
     const normalizedStartDate = normalizeUtcDate(startDate);
     const normalizedWeights = normalizeWeightPair(weights);
@@ -242,7 +252,7 @@ export function computeVariantPerformance(
             continue;
         }
 
-        const target = isRowVariantA(rowDate, normalizedStartDate) ? a : b;
+        const target = isRowVariantA(rowDate, normalizedStartDate, startVariant) ? a : b;
         target.exposureDays += 1;
 
         const impressions = safeNumber(row.impressions);
@@ -438,7 +448,12 @@ export function summarizeFinishedTestMetrics(
         }
 
         const testRows = rowsByTestId.get(test.id) ?? [];
-        const performance = computeVariantPerformance(testRows, test.start_date, weights);
+        const performance = computeVariantPerformance(
+            testRows,
+            test.start_date,
+            weights,
+            test.initial_variant ?? 'A'
+        );
 
         let winner: VariantPerformance;
         let loser: VariantPerformance;

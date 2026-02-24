@@ -10,6 +10,7 @@ import {
 function buildTestRecord(overrides: Partial<TestHistoryTestRecord> = {}): TestHistoryTestRecord {
     return {
         start_date: '2026-01-01T00:00:00.000Z',
+        initial_variant: 'A',
         current_variant: 'A',
         title_a: 'Control title',
         title_b: 'Test title',

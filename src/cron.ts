@@ -143,12 +143,14 @@ export function startCronJobs() {
                         id,
                         user_id: userId,
                         video_id: videoId,
+                        initial_variant: initialVariantRaw,
                         current_variant: currentVariant,
                         title_a: titleA,
                         title_b: titleB,
                         thumbnail_url_a: thumbnailUrlA,
                         thumbnail_url_b: thumbnailUrlB
                     } = test;
+                    const initialVariant: VariantId = initialVariantRaw === 'B' ? 'B' : 'A';
 
                     const yesterday = new Date();
                     yesterday.setDate(yesterday.getDate() - 1);
@@ -185,7 +187,12 @@ export function startCronJobs() {
                             [id]
                         );
 
-                        const performance = computeVariantPerformance(resultsRes.rows, startDate, scoringConfig.weights);
+                        const performance = computeVariantPerformance(
+                            resultsRes.rows,
+                            startDate,
+                            scoringConfig.weights,
+                            initialVariant
+                        );
                         const decision = evaluateWinnerDecision(performance, test.duration_days, scoringConfig, true);
 
                         const oldWinnerVariant: VariantId = performance.b.ctr > performance.a.ctr ? 'B' : 'A';
